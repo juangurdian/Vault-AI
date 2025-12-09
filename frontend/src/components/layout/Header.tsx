@@ -25,6 +25,8 @@ export default function Header() {
   
   const selectedModel = useChatStore((s) => s.selectedModel);
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
+  const smartRoutingEnabled = useChatStore((s) => s.smartRoutingEnabled);
+  const setSmartRoutingEnabled = useChatStore((s) => s.setSmartRoutingEnabled);
   
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [routerStatus, setRouterStatus] = useState<"online" | "offline" | "checking">("checking");
@@ -80,6 +82,23 @@ export default function Header() {
     return grouped;
   }, [models]);
 
+  // Get the effective model (what will actually be used)
+  const effectiveModel = smartRoutingEnabled ? "auto" : selectedModel;
+
+  // Handle toggle change
+  const handleToggle = () => {
+    const newEnabled = !smartRoutingEnabled;
+    setSmartRoutingEnabled(newEnabled);
+    
+    // When enabling smart routing, ensure model is set to auto
+    if (newEnabled) {
+      setSelectedModel("auto");
+    } else if (selectedModel === "auto" && models.length > 0) {
+      // When disabling, default to first available model if currently on auto
+      setSelectedModel(models[0].name);
+    }
+  };
+
   return (
     <header className="shrink-0 border-b border-slate-900/70 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
       <div className="flex items-center justify-between gap-4">
@@ -94,7 +113,7 @@ export default function Header() {
             </div>
             <p className="text-xs text-slate-500">
               {routerStatus === "online" 
-                ? `${models.length} models available • LLM routing`
+                ? `${models.length} models • ${smartRoutingEnabled ? "Smart routing" : "Manual mode"}`
                 : "Connecting to router..."}
             </p>
           </div>
@@ -113,27 +132,64 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Right: Model selector */}
-        <div className="flex items-center gap-2">
-          <label className="hidden text-[10px] uppercase tracking-wider text-slate-500 sm:block">
-            Model
-          </label>
-          <select
-            className="min-w-[180px] rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 outline-none ring-1 ring-transparent transition focus:ring-cyan-500"
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
+        {/* Right: Smart routing toggle + Model selector */}
+        <div className="flex items-center gap-3">
+          {/* Smart Routing Toggle */}
+          <button
+            onClick={handleToggle}
+            className={`group flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+              smartRoutingEnabled
+                ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
+                : "border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300"
+            }`}
+            title={smartRoutingEnabled ? "Smart routing is ON - AI selects the best model" : "Smart routing is OFF - You choose the model"}
           >
-            <option value="auto">Auto (Smart routing)</option>
-            {Object.entries(modelsByType).map(([type, typeModels]) => (
-              <optgroup key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
-                {typeModels.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.display_name} — {m.estimated_tokens_per_sec}t/s
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            {/* Toggle indicator */}
+            <div className={`relative h-4 w-7 rounded-full transition-colors ${
+              smartRoutingEnabled ? "bg-cyan-500" : "bg-slate-700"
+            }`}>
+              <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                smartRoutingEnabled ? "translate-x-3.5" : "translate-x-0.5"
+              }`} />
+            </div>
+            <span className="hidden sm:inline">
+              {smartRoutingEnabled ? "Smart" : "Manual"}
+            </span>
+            {/* Brain/Hand icon */}
+            <span className="text-sm">
+              {smartRoutingEnabled ? "🧠" : "✋"}
+            </span>
+          </button>
+
+          {/* Model selector */}
+          <div className="flex items-center gap-2">
+            <select
+              className={`min-w-[160px] rounded-lg border px-3 py-1.5 text-xs outline-none ring-1 ring-transparent transition focus:ring-cyan-500 ${
+                smartRoutingEnabled
+                  ? "cursor-not-allowed border-slate-800 bg-slate-900/50 text-slate-500"
+                  : "border-slate-700 bg-slate-900 text-slate-100"
+              }`}
+              value={effectiveModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={smartRoutingEnabled}
+            >
+              {smartRoutingEnabled ? (
+                <option value="auto">Auto (AI selects)</option>
+              ) : (
+                <>
+                  {Object.entries(modelsByType).map(([type, typeModels]) => (
+                    <optgroup key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
+                      {typeModels.map((m) => (
+                        <option key={m.name} value={m.name}>
+                          {m.display_name} — {m.estimated_tokens_per_sec}t/s
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </>
+              )}
+            </select>
+          </div>
         </div>
       </div>
 

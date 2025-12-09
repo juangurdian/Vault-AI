@@ -33,6 +33,10 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
     activeId ? state.currentModel[activeId] ?? null : null
   );
   const selectedModel = useChatStore((state) => state.selectedModel);
+  const smartRoutingEnabled = useChatStore((state) => state.smartRoutingEnabled);
+
+  // Determine effective model: "auto" if smart routing is on, otherwise the selected model
+  const effectiveModel = smartRoutingEnabled ? "auto" : selectedModel;
 
   const seededRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -109,7 +113,7 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
     try {
       await streamChat(
         previous,
-        { signal: abortRef.current.signal, model: selectedModel },
+        { signal: abortRef.current.signal, model: effectiveModel },
         {
           onDelta: (chunk) => appendAssistantChunk(chunk),
           onRouting: (payload) => {

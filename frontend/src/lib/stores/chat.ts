@@ -10,6 +10,7 @@ type ChatState = {
   routingInfo: Record<string, RoutingInfo | null>;
   currentModel: Record<string, string | null>;
   selectedModel: string; // "auto" or specific model name
+  smartRoutingEnabled: boolean; // Whether to use intelligent routing
   createConversation: (title?: string) => string;
   setActiveConversation: (id: string) => void;
   setRoutingInfo: (conversationId: string, info: RoutingInfo | null) => void;
@@ -18,6 +19,7 @@ type ChatState = {
   deleteConversation: (id: string) => void;
   setIsGenerating: (val: boolean) => void;
   setSelectedModel: (model: string) => void;
+  setSmartRoutingEnabled: (enabled: boolean) => void;
   reset: () => void;
 };
 
@@ -42,6 +44,7 @@ export const useChatStore = create<ChatState>()(
       routingInfo: {},
       currentModel: {},
       selectedModel: "auto",
+      smartRoutingEnabled: true,
 
       createConversation: (title) => {
         const convo = newConversation(title);
@@ -129,6 +132,8 @@ export const useChatStore = create<ChatState>()(
 
       setSelectedModel: (model) => set({ selectedModel: model }),
 
+      setSmartRoutingEnabled: (enabled) => set({ smartRoutingEnabled: enabled }),
+
       reset: () =>
         set({
           conversations: {},
@@ -137,6 +142,7 @@ export const useChatStore = create<ChatState>()(
           routingInfo: {},
           currentModel: {},
           selectedModel: "auto",
+          smartRoutingEnabled: true,
         }),
     }),
     {
