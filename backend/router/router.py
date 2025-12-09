@@ -1,56 +1,80 @@
-from typing import Optional, Dict, Any, List
+"""
+Intelligent model router with auto-discovery and LLM-based routing.
+"""
+
+from typing import Optional, Dict, Any, List, AsyncGenerator
 import asyncio
 import time
 from datetime import datetime
+import logging
+import json
 
 from .classifier import QueryClassifier, TaskType
+from .model_profiles import ModelRegistry, ModelProfile, ModelType
 import ollama
+
+logger = logging.getLogger(__name__)
+
+
+# Mapping from TaskType to ModelType
+TASK_TO_MODEL_TYPE = {
+    TaskType.SIMPLE_CHAT: ModelType.FAST,
+    TaskType.GENERAL: ModelType.GENERAL,
+    TaskType.REASONING: ModelType.REASONING,
+    TaskType.CODING: ModelType.CODING,
+    TaskType.VISION: ModelType.VISION,
+    TaskType.CREATIVE: ModelType.CREATIVE,
+}
 
 
 class ModelRouter:
-    """Intelligent model router that automatically selects optimal models."""
+    """Intelligent model router with auto-discovery and LLM-based routing."""
 
-    def __init__(self):
+    def __init__(self, use_llm_routing: bool = True, routing_timeout_ms: int = 500):
         self.classifier = QueryClassifier()
         self.client = ollama.Client()
+        self.registry = ModelRegistry()
+        self.use_llm_routing = use_llm_routing
+        self.routing_timeout_ms = routing_timeout_ms
+        
+        # Discover models on init
+        self._discover_models()
+        
+        # Cache for routing decisions
+        self._routing_cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_max_size = 100
 
-        # Model capabilities and configurations
-        self.model_configs = {
-            "qwen3:4b": {
-                "context_window": 4096,
-                "strengths": ["speed", "simple_chat"],
-                "weaknesses": ["complex_reasoning", "long_context"],
-                "estimated_tokens_per_sec": 50,
-                "estimated_vram_gb": 4,
-            },
-            "qwen3:8b": {
-                "context_window": 8192,
-                "strengths": ["balanced", "general_purpose"],
-                "weaknesses": ["very_complex_tasks"],
-                "estimated_tokens_per_sec": 35,
-                "estimated_vram_gb": 6,
-            },
-            "deepseek-r1:8b": {
-                "context_window": 16384,
-                "strengths": ["reasoning", "analysis", "complex_tasks"],
-                "weaknesses": ["speed"],
-                "estimated_tokens_per_sec": 25,
-                "estimated_vram_gb": 6,
-            },
-            "qwen2.5-coder:7b": {
-                "context_window": 8192,
-                "strengths": ["coding", "programming", "debugging"],
-                "weaknesses": ["general_chat"],
-                "estimated_tokens_per_sec": 35,
-                "estimated_vram_gb": 6,
-            },
-            "llava:7b": {
-                "context_window": 4096,
-                "strengths": ["vision", "image_analysis"],
-                "weaknesses": ["text_only_tasks"],
-                "estimated_tokens_per_sec": 25,
-                "estimated_vram_gb": 6,
+    def _discover_models(self):
+        """Discover available models from Ollama."""
+        try:
+            discovered = self.registry.discover_from_ollama(self.client)
+            logger.info(f"Model discovery complete. {len(self.registry.profiles)} models available.")
+        except Exception as e:
+            logger.error(f"Model discovery failed: {e}")
+            # Fall back to defaults
+            self._load_default_models()
+    
+    def _load_default_models(self):
+        """Load default model configurations as fallback."""
+        from .model_profiles import KNOWN_MODEL_DEFAULTS, create_profile_from_name
+        for name in KNOWN_MODEL_DEFAULTS:
+            if name not in self.registry.profiles:
+                self.registry.profiles[name] = create_profile_from_name(name)
+                self.registry.profiles[name].is_available = False  # Mark as not confirmed
+
+    @property
+    def model_configs(self) -> Dict[str, Dict[str, Any]]:
+        """Backward-compatible property for model configs."""
+        return {
+            name: {
+                "context_window": p.context_window,
+                "strengths": p.strengths,
+                "weaknesses": p.weaknesses,
+                "estimated_tokens_per_sec": p.estimated_tokens_per_sec,
+                "estimated_vram_gb": p.estimated_vram_gb,
             }
+            for name, p in self.registry.profiles.items()
+            if p.is_available
         }
 
     async def route_query(
@@ -62,25 +86,43 @@ class ModelRouter:
         conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Route a query to the optimal model."""
-
         start_time = time.time()
 
         # Allow manual model override
         if force_model and force_model != "auto":
-            if force_model not in self.model_configs:
-                available_models = list(self.model_configs.keys())
-                raise ValueError(f"Unknown model: {force_model}. Available: {available_models}")
+            profile = self.registry.get_profile(force_model)
+            if not profile or not profile.is_available:
+                available = [p.name for p in self.registry.get_chat_models()]
+                raise ValueError(f"Model '{force_model}' not available. Available: {available}")
 
             return {
                 "model": force_model,
                 "routing_method": "manual_override",
+                "task_type": profile.model_type.value if profile else "unknown",
                 "reasoning": f"User specified model: {force_model}",
                 "confidence": 1.0,
+                "complexity": 0.0,
+                "estimated_tokens": self._estimate_token_count(query, context),
+                "expected_speed": f"{profile.estimated_tokens_per_sec}+ tok/s" if profile else "unknown",
+                "keywords_found": [],
                 "processing_time_ms": int((time.time() - start_time) * 1000),
                 "timestamp": datetime.now().isoformat()
             }
 
-        # Analyze the query
+        # Check cache
+        cache_key = self._make_cache_key(query, images is not None)
+        if cache_key in self._routing_cache:
+            cached = self._routing_cache[cache_key].copy()
+            cached["routing_method"] = "cached"
+            cached["processing_time_ms"] = int((time.time() - start_time) * 1000)
+            return cached
+
+        # Try LLM-based routing first (if enabled and fast enough)
+        llm_result = None
+        if self.use_llm_routing:
+            llm_result = await self._llm_route(query, conversation_history)
+
+        # Fall back to regex-based classification
         has_images = images is not None and len(images) > 0
         context_length = len(context) if context else 0
 
@@ -91,33 +133,53 @@ class ModelRouter:
             conversation_history=conversation_history
         )
 
-        # Get model recommendation
-        recommendation = self.classifier.get_model_recommendation(classification)
+        # Determine model
+        if llm_result and llm_result.get("model"):
+            selected_model = llm_result["model"]
+            reasoning = llm_result.get("reasoning", "LLM-based routing")
+            routing_method = "llm"
+            confidence = 0.9
+        else:
+            # Use regex classification
+            model_type = TASK_TO_MODEL_TYPE.get(classification.task_type, ModelType.GENERAL)
+            selected_model = self.registry.get_best_model_for_type(model_type)
+            
+            if not selected_model:
+                # Fallback to any available model
+                chat_models = self.registry.get_chat_models()
+                selected_model = chat_models[0].name if chat_models else "qwen3:8b"
+            
+            reasoning = classification.reasoning
+            routing_method = "regex"
+            confidence = classification.confidence
 
-        # Validate context length doesn't exceed model limits
+        # Validate context length
         estimated_tokens = self._estimate_token_count(query, context)
-        selected_model = recommendation["model"]
-
-        if estimated_tokens > self.model_configs[selected_model]["context_window"] * 0.8:
-            # If context is too long, prefer models with larger context windows
-            if estimated_tokens <= self.model_configs["deepseek-r1:8b"]["context_window"]:
-                selected_model = "deepseek-r1:8b"
-                recommendation["reason"] += " (upgraded for context length)"
+        profile = self.registry.get_profile(selected_model)
+        
+        warning = None
+        if profile and estimated_tokens > profile.context_window * 0.8:
+            # Try to find a model with larger context
+            for p in self.registry.get_chat_models():
+                if p.context_window > estimated_tokens * 1.2:
+                    selected_model = p.name
+                    reasoning += f" (upgraded to {p.name} for context length)"
+                    break
             else:
-                recommendation["warning"] = "Query may exceed context window limits"
+                warning = "Query may exceed context window limits"
 
         processing_time = int((time.time() - start_time) * 1000)
-
-        return {
+        
+        result = {
             "model": selected_model,
-            "routing_method": "intelligent",
-            "task_type": recommendation["task_type"],
-            "confidence": recommendation["confidence"],
-            "complexity": recommendation["complexity"],
-            "reasoning": recommendation["reason"],
+            "routing_method": routing_method,
+            "task_type": classification.task_type.value,
+            "confidence": confidence,
+            "complexity": classification.complexity_score,
+            "reasoning": reasoning,
             "estimated_tokens": estimated_tokens,
-            "expected_speed": recommendation.get("expected_speed", "Unknown"),
-            "keywords_found": [str(kw) for kw in recommendation.get("keywords", [])],
+            "expected_speed": f"{profile.estimated_tokens_per_sec}+ tok/s" if profile else "unknown",
+            "keywords_found": [str(kw) for kw in classification.keywords_found[:5]],
             "processing_time_ms": processing_time,
             "timestamp": datetime.now().isoformat(),
             "classification_details": {
@@ -127,38 +189,126 @@ class ModelRouter:
                 "reasoning": classification.reasoning
             }
         }
+        
+        if warning:
+            result["warning"] = warning
+
+        # Cache the result
+        self._cache_result(cache_key, result)
+
+        return result
+
+    async def _llm_route(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Use a fast LLM to make routing decisions."""
+        router_model = self.registry.get_routing_model()
+        if not router_model:
+            return None
+
+        # Build context summary
+        context_summary = ""
+        if conversation_history and len(conversation_history) > 0:
+            recent = conversation_history[-3:]  # Last 3 exchanges
+            context_summary = " | ".join([
+                f"{m.get('role', 'user')}: {m.get('content', '')[:100]}"
+                for m in recent
+            ])
+
+        # Build model profiles for prompt
+        profiles_text = self.registry.get_profiles_summary()
+
+        prompt = f"""You are a query router. Analyze the user's query and select the best model.
+
+Available models:
+{profiles_text}
+
+User query: {query}
+{f"Recent context: {context_summary}" if context_summary else ""}
+
+Select the most appropriate model. Respond with ONLY valid JSON:
+{{"model": "model_name", "reasoning": "brief explanation (max 20 words)"}}"""
+
+        try:
+            # Run with timeout
+            response = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.client.chat(
+                        model=router_model,
+                        messages=[{"role": "user", "content": prompt}],
+                        options={"temperature": 0.1, "num_predict": 100}
+                    )
+                ),
+                timeout=self.routing_timeout_ms / 1000
+            )
+
+            content = response.get("message", {}).get("content", "")
+            
+            # Parse JSON from response
+            # Try to extract JSON even if there's extra text
+            json_match = content
+            if "{" in content and "}" in content:
+                start = content.index("{")
+                end = content.rindex("}") + 1
+                json_match = content[start:end]
+            
+            result = json.loads(json_match)
+            
+            # Validate model exists
+            if result.get("model") and self.registry.get_profile(result["model"]):
+                return result
+            
+            return None
+
+        except asyncio.TimeoutError:
+            logger.debug(f"LLM routing timed out after {self.routing_timeout_ms}ms")
+            return None
+        except json.JSONDecodeError:
+            logger.debug(f"LLM routing returned invalid JSON")
+            return None
+        except Exception as e:
+            logger.debug(f"LLM routing failed: {e}")
+            return None
 
     async def execute_query(
         self,
         routing_result: Dict[str, Any],
         messages: List[Dict[str, Any]],
+        stream: bool = False,
         **kwargs
     ) -> Dict[str, Any]:
         """Execute the routed query and return the response."""
-
         model = routing_result["model"]
+        profile = self.registry.get_profile(model)
         start_time = time.time()
 
-        # Pack context respecting the model context window (and include optional summary)
+        # Pack context
         packed_messages, packing_stats = self._pack_messages(messages, model)
 
+        # Add system prompt if profile has one
+        if profile and profile.system_prompt:
+            # Check if there's already a system message
+            has_system = any(m.get("role") == "system" for m in packed_messages)
+            if not has_system:
+                packed_messages.insert(0, {
+                    "role": "system",
+                    "content": profile.system_prompt
+                })
+
         try:
-            # Prepare the request for Ollama
             ollama_messages = []
             for msg in packed_messages:
                 ollama_msg = {
                     "role": msg["role"],
                     "content": msg["content"]
                 }
-
-                # Handle images for vision models
-                if msg.get("images") and routing_result.get("task_type") == "vision":
-                    # Convert base64 images to proper format if needed
+                if msg.get("images") and profile and profile.supports_vision:
                     ollama_msg["images"] = msg["images"]
-
                 ollama_messages.append(ollama_msg)
 
-            # Make the request
             response = self.client.chat(
                 model=model,
                 messages=ollama_messages,
@@ -185,12 +335,7 @@ class ModelRouter:
 
         except Exception as e:
             execution_time = int((time.time() - start_time) * 1000)
-            logger = logging.getLogger(__name__)
-            logger.error(
-                "Execution error for model=%s: %s",
-                model,
-                str(e),
-            )
+            logger.error(f"Execution error for model={model}: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -200,56 +345,102 @@ class ModelRouter:
                 "packing": packing_stats,
             }
 
+    async def execute_query_stream(
+        self,
+        routing_result: Dict[str, Any],
+        messages: List[Dict[str, Any]],
+        **kwargs
+    ) -> AsyncGenerator[str, None]:
+        """Execute query with true streaming."""
+        model = routing_result["model"]
+        profile = self.registry.get_profile(model)
+
+        # Pack context
+        packed_messages, _ = self._pack_messages(messages, model)
+
+        # Add system prompt
+        if profile and profile.system_prompt:
+            has_system = any(m.get("role") == "system" for m in packed_messages)
+            if not has_system:
+                packed_messages.insert(0, {
+                    "role": "system",
+                    "content": profile.system_prompt
+                })
+
+        ollama_messages = []
+        for msg in packed_messages:
+            ollama_msg = {
+                "role": msg["role"],
+                "content": msg["content"]
+            }
+            if msg.get("images") and profile and profile.supports_vision:
+                ollama_msg["images"] = msg["images"]
+            ollama_messages.append(ollama_msg)
+
+        try:
+            # True streaming from Ollama
+            for chunk in self.client.chat(
+                model=model,
+                messages=ollama_messages,
+                stream=True,
+                options={
+                    "temperature": kwargs.get("temperature", 0.7),
+                    "top_p": kwargs.get("top_p", 0.9),
+                    "num_predict": kwargs.get("max_tokens", 2048)
+                }
+            ):
+                content = chunk.get("message", {}).get("content", "")
+                if content:
+                    yield content
+        except Exception as e:
+            logger.error(f"Streaming error for model={model}: {e}")
+            yield f"\n⚠️ Error: {str(e)}"
+
     def get_available_models(self) -> Dict[str, Any]:
         """Get information about all available models."""
         return {
-            model_name: {
-                **config,
-                "model_name": model_name,
-                "status": "available"  # Could check actual availability
-            }
-            for model_name, config in self.model_configs.items()
+            name: profile.to_dict()
+            for name, profile in self.registry.profiles.items()
+            if profile.is_available
         }
 
+    def get_chat_models(self) -> List[Dict[str, Any]]:
+        """Get all models suitable for chat."""
+        return [p.to_dict() for p in self.registry.get_chat_models()]
+
+    def refresh_models(self) -> List[str]:
+        """Refresh model list from Ollama."""
+        return self.registry.discover_from_ollama(self.client)
+
     def get_routing_stats(self) -> Dict[str, Any]:
-        """Get routing statistics (placeholder for future implementation)."""
+        """Get routing statistics."""
         return {
-            "total_queries": 0,
-            "model_usage": {model: 0 for model in self.model_configs.keys()},
-            "avg_confidence": 0.0,
-            "avg_processing_time_ms": 0
+            "cache_size": len(self._routing_cache),
+            "cache_max_size": self._cache_max_size,
+            "models_available": len([p for p in self.registry.profiles.values() if p.is_available]),
+            "llm_routing_enabled": self.use_llm_routing,
+            "routing_timeout_ms": self.routing_timeout_ms,
         }
 
     def _estimate_token_count(self, text: str, context: Optional[str] = None) -> int:
-        """Roughly estimate token count for a text string."""
+        """Estimate token count for text."""
         if not text:
             return 0
-
-        # Simple estimation: ~4 characters per token for English text
-        # This is a rough approximation - real tokenization is more complex
         total_chars = len(text)
         if context:
             total_chars += len(context)
-
-        estimated_tokens = total_chars // 4
-
-        # Add some overhead for special tokens and formatting
-        return int(estimated_tokens * 1.1)
+        return int(total_chars // 4 * 1.1)
 
     def _pack_messages(self, messages: List[Dict[str, Any]], model: str):
-        """
-        Trim the conversation history to fit within the model context window.
-        Strategy: keep most recent messages until ~80% of the context window is used.
-        Adds a lightweight rolling summary of dropped history.
-        """
-        context_window = self.model_configs.get(model, {}).get("context_window", 4096)
+        """Pack messages to fit within model context window."""
+        profile = self.registry.get_profile(model)
+        context_window = profile.context_window if profile else 4096
         target_tokens = int(context_window * 0.8)
 
         kept = []
         total_tokens = 0
         dropped: List[Dict[str, Any]] = []
 
-        # Walk from newest to oldest, accumulate until the limit
         for msg in reversed(messages):
             msg_tokens = self._estimate_token_count(msg.get("content", ""))
             if total_tokens + msg_tokens <= target_tokens or not kept:
@@ -268,19 +459,15 @@ class ModelRouter:
         used_summary = False
         summary_tokens = 0
 
-        # Create a lightweight summary of dropped content if any
-        summary_msg = None
         if dropped:
             used_summary = True
             summary_text = self._build_summary(dropped)
             summary_tokens = self._estimate_token_count(summary_text)
-            # Only prepend summary if it fits comfortably
             if summary_tokens + tokens_kept < target_tokens:
-                summary_msg = {
+                kept.insert(0, {
                     "role": "system",
-                    "content": f"Conversation summary so far: {summary_text}",
-                }
-                kept.insert(0, summary_msg)
+                    "content": f"Previous conversation summary: {summary_text}",
+                })
                 tokens_kept += summary_tokens
 
         packing_stats = {
@@ -296,13 +483,25 @@ class ModelRouter:
         return kept, packing_stats
 
     def _build_summary(self, messages: List[Dict[str, Any]]) -> str:
-        """Lightweight deterministic summary (no extra model call)."""
-        # Take up to the last 3 dropped user/assistant turns and compress them.
+        """Build a summary of dropped messages."""
         snippets = []
         for msg in messages[-6:]:
             role = msg.get("role", "user")
-            content = msg.get("content", "")
+            content = msg.get("content", "")[:150]
             snippets.append(f"{role}: {content}")
-        joined = " | ".join(snippets)
-        # Truncate to keep tokens small
-        return joined[:600]
+        return " | ".join(snippets)[:600]
+
+    def _make_cache_key(self, query: str, has_images: bool) -> str:
+        """Create cache key for routing decisions."""
+        # Simple key based on query prefix and image flag
+        prefix = query[:100].lower().strip()
+        return f"{prefix}|{has_images}"
+
+    def _cache_result(self, key: str, result: Dict[str, Any]):
+        """Cache a routing result."""
+        if len(self._routing_cache) >= self._cache_max_size:
+            # Remove oldest entries
+            oldest = list(self._routing_cache.keys())[:10]
+            for k in oldest:
+                del self._routing_cache[k]
+        self._routing_cache[key] = result.copy()

@@ -1,3 +1,7 @@
+"""
+Chat API endpoints with intelligent routing and true streaming.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -5,6 +9,7 @@ from typing import List, Optional, Dict, Any
 import time
 import json
 import logging
+import asyncio
 
 from ..deps import get_model_router
 from ..router.router import ModelRouter
@@ -37,64 +42,67 @@ class ChatResponse(BaseModel):
     routing_info: Dict[str, Any]
 
 
-def _format_event(payload: Dict[str, Any]) -> str:
-    return f"data: {json.dumps(payload)}\n\n"
-
-
-def _chunk_text(text: str, chunk_size: int = 32):
-    for i in range(0, len(text), chunk_size):
-        yield text[i : i + chunk_size]
+def _format_event(event_type: str, payload: Any) -> str:
+    """Format a server-sent event."""
+    data = {"type": event_type}
+    if isinstance(payload, str):
+        data["text"] = payload
+    else:
+        data["payload"] = payload
+    return f"data: {json.dumps(data)}\n\n"
 
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest, model_router: ModelRouter = Depends(get_model_router)):
-    """Chat endpoint with intelligent routing."""
+    """Chat endpoint with intelligent routing (non-streaming)."""
     start = time.perf_counter()
 
     if not request.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
 
-    # Use last user message for routing
     last_user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
     if not last_user_msg:
         raise HTTPException(status_code=400, detail="No user message found")
 
-    routing_result = await model_router.route_query(
-        query=last_user_msg.content,
-        images=last_user_msg.images,
-        context=request.context,
-        force_model=request.model,
-        conversation_history=[msg.dict() for msg in request.messages[:-1]],
-    )
-    logger.info("Routing decision (non-stream): %s", routing_result)
+    try:
+        routing_result = await model_router.route_query(
+            query=last_user_msg.content,
+            images=last_user_msg.images,
+            context=request.context,
+            force_model=request.model,
+            conversation_history=[msg.model_dump() for msg in request.messages[:-1]],
+        )
+        logger.info(f"Routing: {routing_result.get('model')} via {routing_result.get('routing_method')}")
 
-    execution_result = await model_router.execute_query(
-        routing_result=routing_result,
-        messages=[msg.dict() for msg in request.messages],
-        temperature=request.temperature,
-        top_p=request.top_p,
-        max_tokens=request.max_tokens,
-    )
-    logger.info("Execution result (non-stream) success=%s model=%s", execution_result.get("success"), execution_result.get("model_used"))
+        execution_result = await model_router.execute_query(
+            routing_result=routing_result,
+            messages=[msg.model_dump() for msg in request.messages],
+            temperature=request.temperature,
+            top_p=request.top_p,
+            max_tokens=request.max_tokens,
+        )
 
-    packing = execution_result.get("packing") or {}
+        packing = execution_result.get("packing") or {}
+        routing_result_with_packing = {**routing_result, "packing": packing}
 
-    # Attach packing info to routing
-    routing_result_with_packing = {**routing_result, "packing": packing}
-
-    return ChatResponse(
-        success=execution_result["success"],
-        response=execution_result.get("response"),
-        error=execution_result.get("error"),
-        model_used=execution_result["model_used"],
-        execution_time_ms=int((time.perf_counter() - start) * 1000),
-        routing_info=routing_result_with_packing,
-    )
+        return ChatResponse(
+            success=execution_result["success"],
+            response=execution_result.get("response"),
+            error=execution_result.get("error"),
+            model_used=execution_result["model_used"],
+            execution_time_ms=int((time.perf_counter() - start) * 1000),
+            routing_info=routing_result_with_packing,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/stream")
 async def chat_stream(request: ChatRequest, model_router: ModelRouter = Depends(get_model_router)):
-    """Stream responses via server-sent events."""
+    """Stream responses via server-sent events with true streaming."""
     if not request.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
 
@@ -102,66 +110,75 @@ async def chat_stream(request: ChatRequest, model_router: ModelRouter = Depends(
     if not last_user_msg:
         raise HTTPException(status_code=400, detail="No user message found")
 
-    routing_result = await model_router.route_query(
-        query=last_user_msg.content,
-        images=last_user_msg.images,
-        context=request.context,
-        force_model=request.model,
-        conversation_history=[msg.dict() for msg in request.messages[:-1]],
-    )
-    logger.info("Routing decision (stream): %s", routing_result)
+    try:
+        routing_result = await model_router.route_query(
+            query=last_user_msg.content,
+            images=last_user_msg.images,
+            context=request.context,
+            force_model=request.model,
+            conversation_history=[msg.model_dump() for msg in request.messages[:-1]],
+        )
+        logger.info(f"Stream routing: {routing_result.get('model')} via {routing_result.get('routing_method')}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    execution_result = await model_router.execute_query(
-        routing_result=routing_result,
-        messages=[msg.dict() for msg in request.messages],
-        temperature=request.temperature,
-        top_p=request.top_p,
-        max_tokens=request.max_tokens,
-    )
-
-    response_text = execution_result.get("response", "") or ""
-    success = execution_result.get("success", False)
-    packing = execution_result.get("packing") or {}
+    # Get model metadata for routing info
     model_meta = model_router.model_configs.get(routing_result.get("model"), {})
-    logger.info(
-        "Execution result (stream) success=%s model=%s tokens_kept=%s tokens_dropped=%s",
-        success,
-        execution_result.get("model_used"),
-        packing.get("tokens_kept"),
-        packing.get("tokens_dropped"),
-    )
+    
+    # Pre-compute packing stats
+    messages_list = [msg.model_dump() for msg in request.messages]
+    _, packing_stats = model_router._pack_messages(messages_list, routing_result["model"])
 
     async def event_generator():
+        start_time = time.perf_counter()
+        
         # Emit routing information first
-        yield _format_event(
-            {
-                "type": "routing",
-                "payload": {
-                    **routing_result,
-                    "packing": packing,
-                    "model_meta": {
-                        "context_window": model_meta.get("context_window"),
-                        "estimated_vram_gb": model_meta.get("estimated_vram_gb"),
-                        "estimated_tokens_per_sec": model_meta.get("estimated_tokens_per_sec"),
-                    },
-                },
-            }
-        )
+        yield _format_event("routing", {
+            **routing_result,
+            "packing": packing_stats,
+            "model_meta": {
+                "context_window": model_meta.get("context_window"),
+                "estimated_vram_gb": model_meta.get("estimated_vram_gb"),
+                "estimated_tokens_per_sec": model_meta.get("estimated_tokens_per_sec"),
+            },
+        })
 
-        # Stream assistant content in chunks
-        for chunk in _chunk_text(response_text):
-            yield _format_event({"type": "delta", "text": chunk})
+        # True streaming from the model
+        error_message = None
+        tokens_generated = 0
+        
+        try:
+            async for chunk in model_router.execute_query_stream(
+                routing_result=routing_result,
+                messages=messages_list,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                max_tokens=request.max_tokens,
+            ):
+                tokens_generated += len(chunk) // 4  # Rough estimate
+                yield _format_event("delta", chunk)
+                
+        except Exception as e:
+            error_message = str(e)
+            logger.error(f"Stream error: {e}")
+            yield _format_event("delta", f"\n⚠️ Error: {error_message}")
 
         # Emit completion metadata
-        yield _format_event(
-            {
-                "type": "done",
-                "payload": {
-                    "success": success,
-                    "model_used": execution_result.get("model_used"),
-                    "error": execution_result.get("error"),
-                },
-            }
-        )
+        execution_time_ms = int((time.perf_counter() - start_time) * 1000)
+        yield _format_event("done", {
+            "success": error_message is None,
+            "model_used": routing_result.get("model"),
+            "error": error_message,
+            "execution_time_ms": execution_time_ms,
+            "tokens_generated": tokens_generated,
+        })
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from .config import get_settings
 from .deps import get_model_router
-from .api import chat, agents, rag, images
+from .api import chat, agents, rag, images, models
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(chat.router, prefix=settings.api_prefix)
+app.include_router(models.router, prefix=settings.api_prefix)
 app.include_router(agents.router, prefix=settings.api_prefix)
 app.include_router(rag.router, prefix=settings.api_prefix)
 app.include_router(images.router, prefix=settings.api_prefix)
@@ -39,9 +40,13 @@ app.include_router(images.router, prefix=settings.api_prefix)
 async def root():
     return {
         "service": settings.app_name,
-        "version": "1.1.0",
+        "version": "2.0.0",
+        "features": ["llm_routing", "auto_discovery", "true_streaming"],
         "endpoints": [
             f"{settings.api_prefix}/chat",
+            f"{settings.api_prefix}/chat/stream",
+            f"{settings.api_prefix}/models",
+            f"{settings.api_prefix}/models/refresh",
             f"{settings.api_prefix}/agents/research",
             f"{settings.api_prefix}/agents/code",
             f"{settings.api_prefix}/rag/search",
@@ -53,10 +58,13 @@ async def root():
 @app.get("/health")
 async def health():
     router = get_model_router()
+    stats = router.get_routing_stats()
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "models": list(router.model_configs.keys()),
+        "models_available": stats["models_available"],
+        "llm_routing_enabled": stats["llm_routing_enabled"],
+        "routing_model": router.registry.get_routing_model(),
     }
 
 
