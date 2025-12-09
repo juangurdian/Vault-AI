@@ -22,10 +22,18 @@ export default function RoutingInfoPanel({ info, previousModel }: RoutingInfoPan
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-200">
-          Model: {info.model}
+          {info.model}
         </span>
-        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-400">
-          {info.routing_method}
+        <span className={`rounded-full px-2 py-0.5 text-[11px] ${
+          info.routing_method === "llm" 
+            ? "bg-cyan-500/20 text-cyan-300" 
+            : info.routing_method === "cached"
+            ? "bg-purple-500/20 text-purple-300"
+            : "bg-slate-800 text-slate-400"
+        }`}>
+          {info.routing_method === "llm" ? "LLM routed" : 
+           info.routing_method === "cached" ? "Cached" :
+           info.routing_method === "manual_override" ? "Manual" : "Regex"}
         </span>
         {info.task_type && (
           <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-400">

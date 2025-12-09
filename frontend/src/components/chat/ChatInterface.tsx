@@ -32,6 +32,7 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
   const currentModel = useChatStore((state) =>
     activeId ? state.currentModel[activeId] ?? null : null
   );
+  const selectedModel = useChatStore((state) => state.selectedModel);
 
   const seededRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -108,7 +109,7 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
     try {
       await streamChat(
         previous,
-        { signal: abortRef.current.signal },
+        { signal: abortRef.current.signal, model: selectedModel },
         {
           onDelta: (chunk) => appendAssistantChunk(chunk),
           onRouting: (payload) => {

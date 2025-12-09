@@ -9,6 +9,7 @@ type ChatState = {
   isGenerating: boolean;
   routingInfo: Record<string, RoutingInfo | null>;
   currentModel: Record<string, string | null>;
+  selectedModel: string; // "auto" or specific model name
   createConversation: (title?: string) => string;
   setActiveConversation: (id: string) => void;
   setRoutingInfo: (conversationId: string, info: RoutingInfo | null) => void;
@@ -16,6 +17,7 @@ type ChatState = {
   replaceMessages: (conversationId: string, messages: Message[]) => void;
   deleteConversation: (id: string) => void;
   setIsGenerating: (val: boolean) => void;
+  setSelectedModel: (model: string) => void;
   reset: () => void;
 };
 
@@ -39,6 +41,7 @@ export const useChatStore = create<ChatState>()(
       isGenerating: false,
       routingInfo: {},
       currentModel: {},
+      selectedModel: "auto",
 
       createConversation: (title) => {
         const convo = newConversation(title);
@@ -124,6 +127,8 @@ export const useChatStore = create<ChatState>()(
 
       setIsGenerating: (val) => set({ isGenerating: val }),
 
+      setSelectedModel: (model) => set({ selectedModel: model }),
+
       reset: () =>
         set({
           conversations: {},
@@ -131,6 +136,7 @@ export const useChatStore = create<ChatState>()(
           isGenerating: false,
           routingInfo: {},
           currentModel: {},
+          selectedModel: "auto",
         }),
     }),
     {

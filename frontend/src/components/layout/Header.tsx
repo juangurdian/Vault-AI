@@ -1,27 +1,84 @@
 "use client";
-"use client";
-import { useMemo } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore, AppMode } from "@/lib/stores/app";
 import { useOffline } from "@/lib/hooks/useOffline";
+import { useChatStore } from "@/lib/stores/chat";
 
-const MODELS = [
-  { id: "qwen3-4b", label: "qwen3:4b", desc: "Fast chat" },
-  { id: "qwen3-8b", label: "qwen3:8b", desc: "Balanced" },
-  { id: "deepseek-r1-8b", label: "deepseek-r1:8b", desc: "Reasoning" },
-  { id: "qwen2.5-coder-7b", label: "qwen2.5-coder:7b", desc: "Coding" },
-];
+type ModelInfo = {
+  name: string;
+  model_type: string;
+  display_name: string;
+  description: string;
+  estimated_tokens_per_sec: number;
+  is_available: boolean;
+};
+
+const API_BASE =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE) ||
+  "http://localhost:8001/api";
 
 export default function Header() {
   const mode = useAppStore((s) => s.mode);
   const setMode = useAppStore((s) => s.setMode);
   const offline = useOffline();
+  
+  const selectedModel = useChatStore((s) => s.selectedModel);
+  const setSelectedModel = useChatStore((s) => s.setSelectedModel);
+  
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [routerStatus, setRouterStatus] = useState<"online" | "offline" | "checking">("checking");
+
+  // Fetch models from API
+  useEffect(() => {
+    async function fetchModels() {
+      try {
+        const response = await fetch(`${API_BASE}/models`);
+        if (response.ok) {
+          const data = await response.json();
+          setModels(data.models || []);
+          setRouterStatus("online");
+        } else {
+          setRouterStatus("offline");
+        }
+      } catch {
+        setRouterStatus("offline");
+      }
+    }
+    
+    fetchModels();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchModels, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const status = useMemo(
     () => [
-      { label: "Router", state: offline ? "offline" : "online", color: offline ? "bg-amber-400" : "bg-emerald-400" },
-      { label: "Ollama", state: offline ? "offline" : "online", color: offline ? "bg-amber-400" : "bg-emerald-400" },
+      { 
+        label: "Router", 
+        state: routerStatus, 
+        color: routerStatus === "online" ? "bg-emerald-400" : routerStatus === "checking" ? "bg-yellow-400" : "bg-red-400" 
+      },
+      { 
+        label: "Network", 
+        state: offline ? "offline" : "online", 
+        color: offline ? "bg-amber-400" : "bg-emerald-400" 
+      },
     ],
-    [offline]
+    [offline, routerStatus]
   );
+
+  // Group models by type
+  const modelsByType = useMemo(() => {
+    const grouped: Record<string, ModelInfo[]> = {};
+    for (const model of models) {
+      if (!grouped[model.model_type]) {
+        grouped[model.model_type] = [];
+      }
+      grouped[model.model_type].push(model);
+    }
+    return grouped;
+  }, [models]);
 
   return (
     <header className="shrink-0 border-b border-slate-900/70 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
@@ -36,7 +93,9 @@ export default function Header() {
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              {offline ? "Offline mode: local-only" : "Offline-first • Router-aware"}
+              {routerStatus === "online" 
+                ? `${models.length} models available • LLM routing`
+                : "Connecting to router..."}
             </p>
           </div>
           
@@ -60,13 +119,19 @@ export default function Header() {
             Model
           </label>
           <select
-            className="min-w-[160px] rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 outline-none ring-1 ring-transparent transition focus:ring-cyan-500"
-            defaultValue="qwen3-8b"
+            className="min-w-[180px] rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 outline-none ring-1 ring-transparent transition focus:ring-cyan-500"
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
           >
-            {MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label} — {m.desc}
-              </option>
+            <option value="auto">Auto (Smart routing)</option>
+            {Object.entries(modelsByType).map(([type, typeModels]) => (
+              <optgroup key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
+                {typeModels.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.display_name} — {m.estimated_tokens_per_sec}t/s
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
