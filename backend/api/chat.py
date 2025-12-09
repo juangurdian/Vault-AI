@@ -31,6 +31,7 @@ class ChatRequest(BaseModel):
     top_p: Optional[float] = 0.9
     max_tokens: Optional[int] = 2048
     context: Optional[str] = None
+    images: Optional[List[str]] = None  # Top-level images for the current request
 
 
 class ChatResponse(BaseModel):
@@ -110,10 +111,16 @@ async def chat_stream(request: ChatRequest, model_router: ModelRouter = Depends(
     if not last_user_msg:
         raise HTTPException(status_code=400, detail="No user message found")
 
+    # Use top-level images if provided, otherwise use message-level images
+    images = request.images or last_user_msg.images
+    has_images = images is not None and len(images) > 0
+    
+    logger.info(f"Stream request: model={request.model}, has_images={has_images}")
+
     try:
         routing_result = await model_router.route_query(
             query=last_user_msg.content,
-            images=last_user_msg.images,
+            images=images,
             context=request.context,
             force_model=request.model,
             conversation_history=[msg.model_dump() for msg in request.messages[:-1]],
@@ -125,8 +132,15 @@ async def chat_stream(request: ChatRequest, model_router: ModelRouter = Depends(
     # Get model metadata for routing info
     model_meta = model_router.model_configs.get(routing_result.get("model"), {})
     
-    # Pre-compute packing stats
+    # Pre-compute packing stats - attach images to last message if provided
     messages_list = [msg.model_dump() for msg in request.messages]
+    if images and len(messages_list) > 0:
+        # Find last user message and attach images
+        for i in range(len(messages_list) - 1, -1, -1):
+            if messages_list[i].get("role") == "user":
+                messages_list[i]["images"] = images
+                break
+    
     _, packing_stats = model_router._pack_messages(messages_list, routing_result["model"])
 
     async def event_generator():

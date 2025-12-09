@@ -482,14 +482,57 @@ Select the most appropriate model. Respond with ONLY valid JSON:
 
         return kept, packing_stats
 
-    def _build_summary(self, messages: List[Dict[str, Any]]) -> str:
-        """Build a summary of dropped messages."""
+    def _build_summary(self, messages: List[Dict[str, Any]], use_llm: bool = True) -> str:
+        """Build a summary of dropped messages, optionally using LLM."""
+        total_content = sum(len(m.get("content", "")) for m in messages)
+        
+        # Use LLM summarization for substantial content
+        if use_llm and total_content > 500:
+            summary = self._llm_summarize(messages)
+            if summary:
+                return summary
+        
+        # Fallback to simple concatenation
         snippets = []
         for msg in messages[-6:]:
             role = msg.get("role", "user")
             content = msg.get("content", "")[:150]
             snippets.append(f"{role}: {content}")
         return " | ".join(snippets)[:600]
+    
+    def _llm_summarize(self, messages: List[Dict[str, Any]]) -> Optional[str]:
+        """Use a fast model to summarize conversation history."""
+        router_model = self.registry.get_routing_model()
+        if not router_model:
+            return None
+        
+        # Build conversation text
+        conversation = "\n".join([
+            f"{m.get('role', 'user')}: {m.get('content', '')}"
+            for m in messages[-10:]  # Last 10 messages max
+        ])
+        
+        prompt = f"""Summarize this conversation in 2-3 concise sentences. Focus on:
+- Key topics discussed
+- Important decisions or conclusions
+- Context needed for continuing the conversation
+
+Conversation:
+{conversation[:2000]}
+
+Summary:"""
+
+        try:
+            response = self.client.chat(
+                model=router_model,
+                messages=[{"role": "user", "content": prompt}],
+                options={"temperature": 0.3, "num_predict": 150}
+            )
+            summary = response.get("message", {}).get("content", "").strip()
+            return summary if len(summary) > 20 else None
+        except Exception as e:
+            logger.debug(f"LLM summarization failed: {e}")
+            return None
 
     def _make_cache_key(self, query: str, has_images: bool) -> str:
         """Create cache key for routing decisions."""

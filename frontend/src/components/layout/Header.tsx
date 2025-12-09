@@ -175,6 +175,8 @@ export default function Header() {
             >
               {smartRoutingEnabled ? (
                 <option value="auto">Auto (AI selects)</option>
+              ) : models.length === 0 ? (
+                <option value="" disabled>Loading models...</option>
               ) : (
                 <>
                   {Object.entries(modelsByType).map(([type, typeModels]) => (

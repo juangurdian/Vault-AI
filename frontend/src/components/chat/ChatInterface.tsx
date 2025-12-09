@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import MessageList from "./MessageList";
-import MessageInput from "./MessageInput";
+import MessageInput, { type ToolMode, type Attachment } from "./MessageInput";
 import type { Message } from "./types";
 import { useChatStore } from "@/lib/stores/chat";
 import { useHydrated } from "@/lib/hooks/useHydrated";
@@ -97,23 +97,72 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
   const [showRouting, setShowRouting] = useState(false);
   const offline = useOffline();
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (
+    content: string, 
+    options?: { toolMode?: ToolMode; attachments?: Attachment[] }
+  ) => {
     if (!content.trim() || !activeId || offline) return;
-    addMessage({ role: "user", content }, activeId);
+    
+    const { toolMode, attachments } = options || {};
+    
+    // Build display content with attachment info
+    let displayContent = content;
+    if (attachments && attachments.length > 0) {
+      const imageAttachments = attachments.filter(a => a.isImage);
+      const fileAttachments = attachments.filter(a => !a.isImage);
+      
+      if (imageAttachments.length > 0) {
+        displayContent += `\n\n📷 [${imageAttachments.length} image(s) attached]`;
+      }
+      if (fileAttachments.length > 0) {
+        displayContent += `\n\n📎 Files: ${fileAttachments.map(f => f.name).join(", ")}`;
+      }
+    }
+    
+    addMessage({ role: "user", content: displayContent }, activeId);
     setIsGenerating(true);
     abortRef.current?.abort();
     abortRef.current = new AbortController();
 
+    // Determine model based on tool mode
+    let modelToUse = effectiveModel;
+    if (toolMode === "reasoning") {
+      modelToUse = "deepseek-r1:8b"; // Force reasoning model
+    } else if (toolMode === "vision" || attachments?.some(a => a.isImage)) {
+      modelToUse = "llava:7b"; // Force vision model
+    }
+
+    // Build message content with file contents for context
+    let fullContent = content;
+    if (attachments) {
+      const fileAttachments = attachments.filter(a => !a.isImage);
+      if (fileAttachments.length > 0) {
+        fullContent += "\n\n--- Attached Files ---\n";
+        for (const file of fileAttachments) {
+          fullContent += `\n### ${file.name}\n\`\`\`\n${file.data}\n\`\`\`\n`;
+        }
+      }
+    }
+
     // Build the payload locally to avoid race conditions with store updates
     const previous = [
       ...currentMessages.map((msg) => ({ role: msg.role, content: msg.content })),
-      { role: "user", content },
+      { role: "user", content: fullContent },
     ];
+
+    // Prepare images for API if any
+    const images = attachments
+      ?.filter(a => a.isImage)
+      .map(a => a.data.replace(/^data:image\/\w+;base64,/, "")); // Extract base64 data
 
     try {
       await streamChat(
         previous,
-        { signal: abortRef.current.signal, model: effectiveModel },
+        { 
+          signal: abortRef.current.signal, 
+          model: modelToUse,
+          images: images && images.length > 0 ? images : undefined,
+        },
         {
           onDelta: (chunk) => appendAssistantChunk(chunk),
           onRouting: (payload) => {

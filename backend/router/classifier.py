@@ -28,13 +28,29 @@ class QueryClassifier:
     """Classifies queries to determine optimal model routing."""
 
     # Keywords and patterns for different task types
+    # REASONING has strong indicators that override other classifications
     REASONING_PATTERNS = [
         r'\b(why|how|what if|explain|analyze|compare|step.by.step)\b',
         r'\b(think|reason|prove|derive|understand|comprehend)\b',
         r'\b(cause|effect|relationship|correlation|implication)\b',
         r'\b(theory|concept|principle|framework|paradigm)\b',
         r'\b(advantage|disadvantage|benefit|drawback|trade.off)\b',
-        r'\b(alternative|option|choice|decision|strategy)\b'
+        r'\b(alternative|option|choice|decision|strategy)\b',
+        r'\b(deep|thorough|detailed|comprehensive|in.depth)\b',  # Deep analysis keywords
+        r'\b(evaluate|assess|critique|review|examine)\b',
+        r'\b(logical|systematic|methodical|analytical)\b',
+        r'\b(implications?|consequences?|ramifications?)\b'
+    ]
+    
+    # Strong reasoning indicators that should override other patterns
+    STRONG_REASONING_PHRASES = [
+        r'deep\s+(analysis|dive|look|examination)',
+        r'(analyze|explain|examine)\s+(in\s+detail|thoroughly|carefully)',
+        r'step\s+by\s+step',
+        r'think\s+(through|about|carefully)',
+        r'break\s+(down|it\s+down)',
+        r'pros?\s+and\s+cons?',
+        r'(weigh|consider)\s+(the\s+)?(options?|alternatives?)',
     ]
 
     CODING_PATTERNS = [
@@ -66,6 +82,10 @@ class QueryClassifier:
         """Initialize classifier with compiled regex patterns."""
         self.reasoning_regex = re.compile(
             '|'.join(self.REASONING_PATTERNS),
+            re.IGNORECASE
+        )
+        self.strong_reasoning_regex = re.compile(
+            '|'.join(self.STRONG_REASONING_PHRASES),
             re.IGNORECASE
         )
         self.coding_regex = re.compile(
@@ -105,28 +125,79 @@ class QueryClassifier:
                     reasoning="Images detected with vision-related keywords"
                 )
 
-        # Check for code blocks or strong coding indicators
-        if '```' in query or self.coding_regex.search(query):
+        # Check for STRONG reasoning phrases first (before coding)
+        # These override other classifications because the user explicitly wants analysis
+        strong_reasoning_matches = self.strong_reasoning_regex.findall(query)
+        if strong_reasoning_matches:
+            return ClassificationResult(
+                task_type=TaskType.REASONING,
+                confidence=0.95,
+                complexity_score=self._calculate_complexity(query),
+                keywords_found=strong_reasoning_matches,
+                reasoning=f"Strong reasoning phrase detected: {strong_reasoning_matches[0]}"
+            )
+
+        # Check for code blocks (definite coding task)
+        if '```' in query:
             coding_matches = len(self.coding_regex.findall(query))
-            confidence = min(0.9, 0.5 + (coding_matches * 0.1))
+            return ClassificationResult(
+                task_type=TaskType.CODING,
+                confidence=0.95,
+                complexity_score=self._calculate_complexity(query),
+                keywords_found=self.coding_regex.findall(query),
+                reasoning="Code block detected"
+            )
+
+        # Score both coding and reasoning patterns
+        coding_matches = self.coding_regex.findall(query)
+        reasoning_matches = self.reasoning_regex.findall(query)
+        
+        coding_score = len(coding_matches)
+        reasoning_score = len(reasoning_matches)
+        
+        # If both have matches, pick the stronger one
+        if coding_score > 0 and reasoning_score > 0:
+            if reasoning_score >= coding_score:
+                # Reasoning wins or ties (analysis of code = reasoning about code)
+                confidence = min(0.9, 0.5 + (reasoning_score * 0.1))
+                return ClassificationResult(
+                    task_type=TaskType.REASONING,
+                    confidence=confidence,
+                    complexity_score=self._calculate_complexity(query),
+                    keywords_found=reasoning_matches,
+                    reasoning=f"Reasoning ({reasoning_score}) >= Coding ({coding_score})"
+                )
+            else:
+                # Coding wins
+                confidence = min(0.9, 0.5 + (coding_score * 0.1))
+                return ClassificationResult(
+                    task_type=TaskType.CODING,
+                    confidence=confidence,
+                    complexity_score=self._calculate_complexity(query),
+                    keywords_found=coding_matches,
+                    reasoning=f"Coding ({coding_score}) > Reasoning ({reasoning_score})"
+                )
+
+        # Pure coding patterns
+        if coding_score > 0:
+            confidence = min(0.9, 0.5 + (coding_score * 0.1))
             return ClassificationResult(
                 task_type=TaskType.CODING,
                 confidence=confidence,
                 complexity_score=self._calculate_complexity(query),
-                keywords_found=self.coding_regex.findall(query),
-                reasoning=f"Found {coding_matches} coding-related keywords"
+                keywords_found=coding_matches,
+                reasoning=f"Found {coding_score} coding-related keywords"
             )
 
-        # Check for reasoning patterns
-        if self.reasoning_regex.search(query):
-            reasoning_matches = len(self.reasoning_regex.findall(query))
-            confidence = min(0.85, 0.4 + (reasoning_matches * 0.1))
+        # Pure reasoning patterns
+        if reasoning_score > 0:
+            confidence = min(0.85, 0.4 + (reasoning_score * 0.1))
             return ClassificationResult(
                 task_type=TaskType.REASONING,
                 confidence=confidence,
                 complexity_score=self._calculate_complexity(query),
-                keywords_found=self.reasoning_regex.findall(query),
-                reasoning=f"Found {reasoning_matches} reasoning-related keywords"
+                keywords_found=reasoning_matches,
+                reasoning=f"Found {reasoning_score} reasoning-related keywords"
             )
 
         # Check for creative tasks

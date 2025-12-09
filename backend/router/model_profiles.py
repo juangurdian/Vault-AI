@@ -344,17 +344,45 @@ class ModelRegistry:
     def discover_from_ollama(self, ollama_client) -> List[str]:
         """Discover available models from Ollama and create profiles."""
         try:
-            models = ollama_client.list()
+            response = ollama_client.list()
             discovered = []
             
-            for model_info in models.get("models", []):
-                name = model_info.get("name", "")
+            # Handle both dict response and ListResponse object
+            if hasattr(response, 'models'):
+                models_list = response.models
+            elif isinstance(response, dict):
+                models_list = response.get("models", [])
+            else:
+                models_list = []
+            
+            for model_info in models_list:
+                # Handle Model object or dict
+                if hasattr(model_info, 'model'):
+                    name = model_info.model  # Ollama Model object uses 'model' attribute
+                elif isinstance(model_info, dict):
+                    name = model_info.get("name", "") or model_info.get("model", "")
+                else:
+                    continue
+                
                 if not name:
                     continue
                 
+                # Convert model_info to dict for profile creation
+                model_details = None
+                if hasattr(model_info, '__dict__'):
+                    model_details = {"model": name}
+                    if hasattr(model_info, 'details') and model_info.details:
+                        details = model_info.details
+                        if hasattr(details, 'parameter_size'):
+                            model_details['parameter_size'] = details.parameter_size
+                        if hasattr(details, 'family'):
+                            model_details['family'] = details.family
+                elif isinstance(model_info, dict):
+                    model_details = model_info
+                
                 # Skip if already have custom profile
                 if name not in self.profiles:
-                    profile = create_profile_from_name(name, model_info)
+                    profile = create_profile_from_name(name, model_details)
                     self.profiles[name] = profile
                     discovered.append(name)
                 else:
@@ -368,6 +396,8 @@ class ModelRegistry:
             
         except Exception as e:
             logger.error(f"Failed to discover models from Ollama: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
     
     def get_profile(self, model_name: str) -> Optional[ModelProfile]:
