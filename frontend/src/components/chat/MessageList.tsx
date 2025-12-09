@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import type { Message } from "./types";
+import MarkdownRenderer from "./MarkdownRenderer";
 
 type MessageListProps = {
   messages: Message[];
@@ -54,7 +55,13 @@ export default function MessageList({ messages, isGenerating }: MessageListProps
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 {msg.role === "user" ? "You" : "Assistant"}
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+              <div className="mt-1">
+                {msg.role === "assistant" ? (
+                  <MarkdownRenderer content={msg.content} />
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                )}
+              </div>
             </div>
           </div>
         ))}
