@@ -28,54 +28,55 @@ class QueryClassifier:
     """Classifies queries to determine optimal model routing."""
 
     # Keywords and patterns for different task types
+    # Using non-capturing groups (?:...) to get clean string matches from findall
     # REASONING has strong indicators that override other classifications
     REASONING_PATTERNS = [
-        r'\b(why|how|what if|explain|analyze|compare|step.by.step)\b',
-        r'\b(think|reason|prove|derive|understand|comprehend)\b',
-        r'\b(cause|effect|relationship|correlation|implication)\b',
-        r'\b(theory|concept|principle|framework|paradigm)\b',
-        r'\b(advantage|disadvantage|benefit|drawback|trade.off)\b',
-        r'\b(alternative|option|choice|decision|strategy)\b',
-        r'\b(deep|thorough|detailed|comprehensive|in.depth)\b',  # Deep analysis keywords
-        r'\b(evaluate|assess|critique|review|examine)\b',
-        r'\b(logical|systematic|methodical|analytical)\b',
-        r'\b(implications?|consequences?|ramifications?)\b'
+        r'\b(?:why|how|what if|explain|analyze|compare|step.by.step)\b',
+        r'\b(?:think|reason|prove|derive|understand|comprehend)\b',
+        r'\b(?:cause|effect|relationship|correlation|implication)\b',
+        r'\b(?:theory|concept|principle|framework|paradigm)\b',
+        r'\b(?:advantage|disadvantage|benefit|drawback|trade.off)\b',
+        r'\b(?:alternative|option|choice|decision|strategy)\b',
+        r'\b(?:deep|thorough|detailed|comprehensive|in.depth)\b',  # Deep analysis keywords
+        r'\b(?:evaluate|assess|critique|review|examine)\b',
+        r'\b(?:logical|systematic|methodical|analytical)\b',
+        r'\b(?:implications?|consequences?|ramifications?)\b'
     ]
     
     # Strong reasoning indicators that should override other patterns
     STRONG_REASONING_PHRASES = [
-        r'deep\s+(analysis|dive|look|examination)',
-        r'(analyze|explain|examine)\s+(in\s+detail|thoroughly|carefully)',
+        r'deep\s+(?:analysis|dive|look|examination)',
+        r'(?:analyze|explain|examine)\s+(?:in\s+detail|thoroughly|carefully)',
         r'step\s+by\s+step',
-        r'think\s+(through|about|carefully)',
-        r'break\s+(down|it\s+down)',
+        r'think\s+(?:through|about|carefully)',
+        r'break\s+(?:down|it\s+down)',
         r'pros?\s+and\s+cons?',
-        r'(weigh|consider)\s+(the\s+)?(options?|alternatives?)',
+        r'(?:weigh|consider)\s+(?:the\s+)?(?:options?|alternatives?)',
     ]
 
     CODING_PATTERNS = [
-        r'\b(code|function|class|method|variable|algorithm)\b',
-        r'\b(python|javascript|java|c\+\+|rust|go|typescript)\b',
-        r'\b(debug|error|exception|bug|fix|issue|problem)\b',
-        r'\b(api|library|framework|package|module|import)\b',
-        r'\b(database|sql|query|table|schema|migration)\b',
+        r'\b(?:code|function|class|method|variable|algorithm)\b',
+        r'\b(?:python|javascript|java|c\+\+|rust|go|typescript)\b',
+        r'\b(?:debug|error|exception|bug|fix|issue|problem)\b',
+        r'\b(?:api|library|framework|package|module|import)\b',
+        r'\b(?:database|sql|query|table|schema|migration)\b',
         r'```[\w]*\n',  # Code blocks
-        r'\b(git|github|repository|commit|branch|merge)\b'
+        r'\b(?:git|github|repository|commit|branch|merge)\b'
     ]
 
     CREATIVE_PATTERNS = [
-        r'\b(write|create|design|generate|imagine|story)\b',
-        r'\b(artistic|creative|original|innovative|unique)\b',
-        r'\b(brainstorm|ideate|conceptualize|visualize)\b',
-        r'\b(marketing|advertising|brand|campaign|content)\b',
-        r'\b(poem|story|novel|script|lyrics|music)\b'
+        r'\b(?:write|create|design|generate|imagine|story)\b',
+        r'\b(?:artistic|creative|original|innovative|unique)\b',
+        r'\b(?:brainstorm|ideate|conceptualize|visualize)\b',
+        r'\b(?:marketing|advertising|brand|campaign|content)\b',
+        r'\b(?:poem|story|novel|script|lyrics|music)\b'
     ]
 
     VISION_PATTERNS = [
-        r'\b(image|photo|picture|visual|graphic|artwork)\b',
-        r'\b(describe|analyze|identify|recognize|detect)\b',
-        r'\b(color|shape|size|texture|pattern|layout)\b',
-        r'\b(see|look|appear|visible|display|show)\b'
+        r'\b(?:image|photo|picture|visual|graphic|artwork)\b',
+        r'\b(?:describe|analyze|identify|recognize|detect)\b',
+        r'\b(?:color|shape|size|texture|pattern|layout)\b',
+        r'\b(?:see|look|appear|visible|display|show)\b'
     ]
 
     def __init__(self):
