@@ -18,7 +18,11 @@ const API_BASE =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE) ||
   "http://localhost:8001/api";
 
-export default function Header() {
+type HeaderProps = {
+  onMenuClick?: () => void;
+};
+
+export default function Header({ onMenuClick }: HeaderProps = {}) {
   const mode = useAppStore((s) => s.mode);
   const setMode = useAppStore((s) => s.setMode);
   const offline = useOffline();
@@ -102,8 +106,19 @@ export default function Header() {
   return (
     <header className="shrink-0 border-b border-slate-900/70 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
       <div className="flex items-center justify-between gap-4">
-        {/* Left: Title + Status */}
+        {/* Left: Menu button (mobile) + Title + Status */}
         <div className="flex items-center gap-4">
+          {onMenuClick && (
+            <button
+              onClick={onMenuClick}
+              className="md:hidden rounded p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+              aria-label="Toggle menu"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-slate-50">Local AI Beast</h1>
@@ -133,11 +148,11 @@ export default function Header() {
         </div>
 
         {/* Right: Smart routing toggle + Model selector */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Smart Routing Toggle */}
           <button
             onClick={handleToggle}
-            className={`group flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+            className={`group flex items-center gap-1.5 sm:gap-2 rounded-lg border px-2 sm:px-3 py-1.5 text-xs font-medium transition ${
               smartRoutingEnabled
                 ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
                 : "border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300"
@@ -164,19 +179,18 @@ export default function Header() {
           {/* Model selector */}
           <div className="flex items-center gap-2">
             <select
-              className={`min-w-[160px] rounded-lg border px-3 py-1.5 text-xs outline-none ring-1 ring-transparent transition focus:ring-cyan-500 ${
+              className={`min-w-[120px] sm:min-w-[160px] rounded-lg border px-2 sm:px-3 py-1.5 text-xs outline-none ring-1 ring-transparent transition focus:ring-cyan-500 ${
                 smartRoutingEnabled
                   ? "cursor-not-allowed border-slate-800 bg-slate-900/50 text-slate-500"
-                  : "border-slate-700 bg-slate-900 text-slate-100"
+                  : "border-slate-700 bg-slate-900 text-slate-100 hover:border-slate-600"
               }`}
               value={effectiveModel}
               onChange={(e) => setSelectedModel(e.target.value)}
               disabled={smartRoutingEnabled}
+              aria-label="Select model"
             >
               {smartRoutingEnabled ? (
                 <option value="auto">Auto (AI selects)</option>
-              ) : models.length === 0 ? (
-                <option value="" disabled>Loading models...</option>
               ) : (
                 <>
                   {Object.entries(modelsByType).map(([type, typeModels]) => (
@@ -196,12 +210,12 @@ export default function Header() {
       </div>
 
       {/* Agent mode tabs */}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2 overflow-x-auto">
         {(["chat", "research", "code", "image"] as AppMode[]).map((m) => (
           <button
             key={m}
             onClick={() => setMode(m)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+            className={`shrink-0 rounded-lg border px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition ${
               mode === m
                 ? "border-cyan-500 bg-cyan-500/20 text-cyan-100"
                 : "border-slate-800 bg-slate-900/60 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"

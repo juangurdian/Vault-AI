@@ -15,36 +15,35 @@ const API_BASE =
   "http://localhost:8001/api";
 
 export async function streamChat(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: string; images?: string[] }[],
   options: {
     model?: string;
     temperature?: number;
     top_p?: number;
     max_tokens?: number;
     signal?: AbortSignal;
-    images?: string[]; // base64 encoded images
+    images?: string[];
   },
   callbacks: StreamCallback
 ) {
-  console.debug("streamChat start", { 
-    api: `${API_BASE}/chat/stream`, 
-    messagesCount: messages.length,
-    model: options.model,
-    hasImages: options.images && options.images.length > 0,
-  });
+  console.debug("streamChat start", { api: `${API_BASE}/chat/stream`, messagesCount: messages.length });
 
-  const payload: Record<string, unknown> = {
-    messages,
+  // Add images to the last user message if provided
+  const messagesWithImages = [...messages];
+  if (options.images && options.images.length > 0 && messagesWithImages.length > 0) {
+    const lastMessage = messagesWithImages[messagesWithImages.length - 1];
+    if (lastMessage.role === "user") {
+      lastMessage.images = options.images;
+    }
+  }
+
+  const payload = {
+    messages: messagesWithImages,
     model: options.model ?? "auto",
     temperature: options.temperature ?? 0.7,
     top_p: options.top_p ?? 0.9,
     max_tokens: options.max_tokens ?? 2048,
   };
-  
-  // Add images if present
-  if (options.images && options.images.length > 0) {
-    payload.images = options.images;
-  }
 
   const response = await fetch(`${API_BASE}/chat/stream`, {
     method: "POST",

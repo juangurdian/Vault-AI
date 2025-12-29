@@ -4,7 +4,11 @@ import { useMemo } from "react";
 import { useChatStore } from "@/lib/stores/chat";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
-export default function Sidebar() {
+type SidebarProps = {
+  onClose?: () => void;
+};
+
+export default function Sidebar({ onClose }: SidebarProps) {
   const hydrated = useHydrated();
   
   // Use individual selectors to prevent infinite re-renders from object selector
@@ -12,7 +16,11 @@ export default function Sidebar() {
   const activeId = useChatStore((state) => state.activeId);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const createConversation = useChatStore((state) => state.createConversation);
-  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  
+  const handleConversationClick = (id: string) => {
+    setActiveConversation(id);
+    onClose?.();
+  };
 
   const list = useMemo(
     () => Object.values(conversations).sort((a, b) => b.updatedAt - a.updatedAt),
@@ -25,7 +33,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="hidden h-full w-[260px] flex-col border-r border-slate-900/70 bg-slate-950/80 md:flex lg:w-[300px]">
+    <aside className="h-full w-[260px] flex-col border-r border-slate-900/70 bg-slate-950/80 md:flex lg:w-[300px]">
       {hydrated ? (
         <>
           {/* Header */}
@@ -35,7 +43,20 @@ export default function Sidebar() {
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-cyan-400">Status</p>
                 <p className="text-sm text-slate-200">Online &amp; ready</p>
               </div>
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+              <div className="flex items-center gap-2">
+                {onClose && (
+                  <button
+                    onClick={onClose}
+                    className="md:hidden rounded p-1 text-slate-400 hover:text-slate-200"
+                    aria-label="Close sidebar"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+              </div>
             </div>
           </div>
 
@@ -61,45 +82,27 @@ export default function Sidebar() {
                 </div>
               )}
               {list.map((item) => (
-                <div
+                <button
                   key={item.id}
-                  className={`group relative w-full rounded-lg transition ${
+                  onClick={() => handleConversationClick(item.id)}
+                  className={`group w-full rounded-lg px-3 py-2.5 text-left transition ${
                     activeId === item.id
                       ? "bg-cyan-500/15 ring-1 ring-cyan-500/40"
                       : "hover:bg-slate-900/60"
                   }`}
                 >
-                  <button
-                    onClick={() => setActiveConversation(item.id)}
-                    className="w-full px-3 py-2.5 text-left"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="truncate text-sm font-medium text-slate-100">
-                        {item.title || "Untitled chat"}
-                      </span>
-                      <span className="ml-2 shrink-0 text-[10px] text-slate-500">
-                        {item.messages.length}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 truncate text-xs text-slate-500">
-                      {item.messages[item.messages.length - 1]?.content || "No messages"}
-                    </p>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete "${item.title || "Untitled chat"}"?`)) {
-                        deleteConversation(item.id);
-                      }
-                    }}
-                    className="absolute right-2 top-2 hidden rounded p-1 text-slate-500 transition hover:bg-red-500/20 hover:text-red-400 group-hover:block"
-                    title="Delete conversation"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+                  <div className="flex items-center justify-between">
+                    <span className="truncate text-sm font-medium text-slate-100">
+                      {item.title || "Untitled chat"}
+                    </span>
+                    <span className="ml-2 shrink-0 text-[10px] text-slate-500">
+                      {item.messages.length}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">
+                    {item.messages[item.messages.length - 1]?.content || "No messages"}
+                  </p>
+                </button>
               ))}
             </div>
           </nav>

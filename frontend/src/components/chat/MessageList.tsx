@@ -1,14 +1,16 @@
 "use client";
 import { useEffect, useRef } from "react";
+import MessageBubble from "./MessageBubble";
 import type { Message } from "./types";
-import MarkdownRenderer from "./MarkdownRenderer";
 
 type MessageListProps = {
   messages: Message[];
   isGenerating?: boolean;
+  toolMode?: string;
+  modelUsed?: string | null;
 };
 
-export default function MessageList({ messages, isGenerating }: MessageListProps) {
+export default function MessageList({ messages, isGenerating, toolMode, modelUsed }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when messages change
@@ -41,29 +43,13 @@ export default function MessageList({ messages, isGenerating }: MessageListProps
         )}
 
         {messages.map((msg) => (
-          <div
+          <MessageBubble
             key={msg.id}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                msg.role === "user"
-                  ? "bg-cyan-500/20 text-slate-100"
-                  : "border border-slate-800 bg-slate-900/80 text-slate-100"
-              }`}
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                {msg.role === "user" ? "You" : "Assistant"}
-              </p>
-              <div className="mt-1">
-                {msg.role === "assistant" ? (
-                  <MarkdownRenderer content={msg.content} />
-                ) : (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
-                )}
-              </div>
-            </div>
-          </div>
+            message={msg}
+            toolMode={msg.role === "assistant" ? toolMode : undefined}
+            modelUsed={msg.role === "assistant" ? modelUsed : undefined}
+            showMetadata={true}
+          />
         ))}
 
         {isGenerating && (

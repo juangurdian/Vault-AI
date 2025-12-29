@@ -2,20 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 from ..router.router import ModelRouter
 from .base import AgentContext, AgentResult
 from .research_agent import ResearchAgent
 from .coding_agent import CodingAgent
+from ..rag.vector_store import VectorStore
+from ..config import get_settings
 
 
 class AgentManager:
     """Simple registry/dispatcher for agents."""
 
-    def __init__(self, router: ModelRouter):
+    def __init__(self, router: ModelRouter, vector_store: Optional[VectorStore] = None):
         self.router = router
-        self.research = ResearchAgent(router)
+        settings = get_settings()
+        
+        # Initialize vector store if not provided
+        if vector_store is None:
+            vector_store = VectorStore(ollama_base_url=settings.ollama_base_url)
+        
+        self.research = ResearchAgent(router, vector_store=vector_store)
         self.coding = CodingAgent(router)
         self.registry: Dict[str, object] = {
             "research": self.research,

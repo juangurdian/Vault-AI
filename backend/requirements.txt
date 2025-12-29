@@ -23,4 +23,5 @@ bcrypt
 argon2-cffi
 passlib[bcrypt]
 python-dotenv
+trafilatura
 

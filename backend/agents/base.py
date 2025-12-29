@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 class AgentContext:
     query: str
     history: Optional[List[Dict[str, Any]]] = None
+    context: Optional[str] = None
     web: bool = False
     code: Optional[str] = None
 

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from .config import get_settings
 from .deps import get_model_router
-from .api import chat, agents, rag, images, models
+from .api import chat, agents, rag, models
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,7 +33,6 @@ app.include_router(chat.router, prefix=settings.api_prefix)
 app.include_router(models.router, prefix=settings.api_prefix)
 app.include_router(agents.router, prefix=settings.api_prefix)
 app.include_router(rag.router, prefix=settings.api_prefix)
-app.include_router(images.router, prefix=settings.api_prefix)
 
 
 @app.get("/")
@@ -50,7 +49,6 @@ async def root():
             f"{settings.api_prefix}/agents/research",
             f"{settings.api_prefix}/agents/code",
             f"{settings.api_prefix}/rag/search",
-            f"{settings.api_prefix}/images/generate",
         ],
     }
 

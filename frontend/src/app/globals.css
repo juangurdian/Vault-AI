@@ -49,17 +49,4 @@ body {
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: rgba(100, 116, 139, 0.6);
   }
-
-  /* Markdown content styling */
-  .markdown-content {
-    @apply text-slate-200;
-  }
-
-  .markdown-content > *:first-child {
-    @apply mt-0;
-  }
-
-  .markdown-content > *:last-child {
-    @apply mb-0;
-  }
 }

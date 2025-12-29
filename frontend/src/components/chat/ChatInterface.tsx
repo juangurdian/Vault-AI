@@ -6,11 +6,14 @@ import MessageInput, { type ToolMode, type Attachment } from "./MessageInput";
 import type { Message } from "./types";
 import { useChatStore } from "@/lib/stores/chat";
 import { useHydrated } from "@/lib/hooks/useHydrated";
+import { useAppStore, type AppMode } from "@/lib/stores/app";
 import { streamChat } from "@/lib/api/chat";
-import { generateImage } from "@/lib/api/images";
+import { streamResearch } from "@/lib/api/research";
 import RoutingInfoPanel from "./RoutingInfoPanel";
+import ResearchProgress from "./ResearchProgress";
+import SourcesList from "./SourcesList";
+import type { RoutingInfo } from "./types";
 import { useOffline } from "@/lib/hooks/useOffline";
-import { useAppStore } from "@/lib/stores/app";
 
 type ChatInterfaceProps = {
   initialMessages?: Message[];
@@ -36,32 +39,54 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
   );
   const selectedModel = useChatStore((state) => state.selectedModel);
   const smartRoutingEnabled = useChatStore((state) => state.smartRoutingEnabled);
-  const mode = useAppStore((state) => state.mode);
+
+  // Get app mode and sync with tool mode
+  const appMode = useAppStore((state) => state.mode);
+  const setAppMode = useAppStore((state) => state.setMode);
+  const [activeToolMode, setActiveToolMode] = useState<ToolMode>("none");
 
   // Determine effective model: "auto" if smart routing is on, otherwise the selected model
   const effectiveModel = smartRoutingEnabled ? "auto" : selectedModel;
+
+  // Sync app mode with tool mode with smooth transition
+  useEffect(() => {
+    const modeToTool: Record<AppMode, ToolMode> = {
+      chat: "none",
+      research: "research",
+      code: "reasoning", // Code mode uses reasoning tool
+      image: "vision",
+    };
+    const newToolMode = modeToTool[appMode];
+    if (newToolMode !== activeToolMode) {
+      // Smooth transition - preserve conversation context
+      setActiveToolMode(newToolMode);
+    }
+  }, [appMode, activeToolMode]);
 
   const seededRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    // Only seed initial messages if there's an active conversation
-    if (!activeId) return;
+    if (!activeId) {
+      const id = createConversation("New chat");
+      setActiveConversation(id);
+      return;
+    }
 
     if (seededRef.current) return;
     if (initialMessages && initialMessages.length) {
       initialMessages.forEach((msg) => addMessage(msg, activeId));
     }
     seededRef.current = true;
-  }, [activeId, addMessage, initialMessages]);
+  }, [activeId, addMessage, createConversation, initialMessages, setActiveConversation]);
 
   const currentMessages = activeId ? conversations[activeId]?.messages ?? [] : [];
 
-  const appendAssistantChunk = (chunk: string, convId: string) => {
-    if (!convId) return;
+  const appendAssistantChunk = (chunk: string) => {
+    if (!activeId) return;
     // Use functional update to avoid stale snapshots
     useChatStore.setState((state) => {
-      const conversation = state.conversations[convId];
+      const conversation = state.conversations[activeId];
       if (!conversation) return state;
 
       const updated = [...conversation.messages];
@@ -84,7 +109,7 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
       return {
         conversations: {
           ...state.conversations,
-          [convId]: {
+          [activeId]: {
             ...conversation,
             messages: updated,
             updatedAt: Date.now(),
@@ -95,123 +120,224 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
   };
 
   const [showRouting, setShowRouting] = useState(false);
+  const [researchProgress, setResearchProgress] = useState<{
+    step: number;
+    total: number;
+    message: string;
+    findings: Array<{ title: string; url: string; snippet: string }>;
+    sources: string[];
+    isComplete: boolean;
+  } | null>(null);
   const offline = useOffline();
 
-  const handleSend = async (
-    content: string, 
-    options?: { toolMode?: ToolMode; attachments?: Attachment[] }
-  ) => {
-    if (!content.trim() || offline) return;
+  const handleSend = async (content: string, toolMode?: ToolMode, attachments?: Attachment[]) => {
+    if ((!content.trim() && (!attachments || attachments.length === 0)) || !activeId || offline) return;
     
-    // Create a new conversation if none is active
-    let conversationId = activeId;
-    if (!conversationId) {
-      conversationId = createConversation("New chat");
-      setActiveConversation(conversationId);
-    }
+    // Use active tool mode from state if not provided
+    const effectiveToolMode = toolMode ?? activeToolMode;
     
-    const { toolMode, attachments } = options || {};
-    
-    // Build display content with attachment info
-    let displayContent = content;
-    if (attachments && attachments.length > 0) {
-      const imageAttachments = attachments.filter(a => a.isImage);
-      const fileAttachments = attachments.filter(a => !a.isImage);
-      
-      if (imageAttachments.length > 0) {
-        displayContent += `\n\n📷 [${imageAttachments.length} image(s) attached]`;
-      }
-      if (fileAttachments.length > 0) {
-        displayContent += `\n\n📎 Files: ${fileAttachments.map(f => f.name).join(", ")}`;
+    // Sync tool mode back to app mode if changed manually
+    if (effectiveToolMode !== "none") {
+      const toolToMode: Record<ToolMode, AppMode | null> = {
+        none: "chat",
+        research: "research",
+        reasoning: "code",
+        vision: "image",
+        file: "chat",
+      };
+      const newMode = toolToMode[effectiveToolMode];
+      if (newMode && newMode !== appMode) {
+        setAppMode(newMode);
       }
     }
     
-    addMessage({ role: "user", content: displayContent }, conversationId);
+    // Convert image attachments to base64
+    const imageBase64: string[] = [];
+    if (attachments) {
+      for (const attachment of attachments) {
+        if (attachment.type === "image" && attachment.preview) {
+          // Extract base64 from data URL
+          const base64 = attachment.preview.split(",")[1];
+          if (base64) {
+            imageBase64.push(base64);
+          }
+        }
+      }
+    }
+    
+    addMessage({ role: "user", content }, activeId);
     setIsGenerating(true);
     abortRef.current?.abort();
     abortRef.current = new AbortController();
 
-    // Handle image generation mode
-    if (mode === "image") {
-      try {
-        const result = await generateImage({
-          prompt: content,
-          width: 1024,
-          height: 1024,
-          steps: 20,
-          cfg: 7.0,
-        });
-
-        if (result.success && result.image_base64) {
-          // Add image message
-          const imageMessage: Message = {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: `![Generated Image](data:image/png;base64,${result.image_base64})\n\n**Prompt:** ${content}\n**Seed:** ${result.seed ?? "random"}`,
-            createdAt: Date.now(),
-          };
-          addMessage(imageMessage, conversationId);
-        } else {
-          appendAssistantChunk(`\n⚠️ ${result.message || "Image generation failed"}`, conversationId);
-        }
-        setIsGenerating(false);
-        return;
-      } catch (error) {
-        console.error("Image generation failed", error);
-        appendAssistantChunk(`\n⚠️ Image generation failed: ${error instanceof Error ? error.message : "Unknown error"}`, conversationId);
-        setIsGenerating(false);
-        return;
-      }
-    }
-
-    // Determine model based on tool mode
-    let modelToUse = effectiveModel;
-    if (toolMode === "reasoning") {
-      modelToUse = "deepseek-r1:8b"; // Force reasoning model
-    } else if (toolMode === "vision" || attachments?.some(a => a.isImage)) {
-      modelToUse = "llava:7b"; // Force vision model
-    }
-
-    // Build message content with file contents for context
-    let fullContent = content;
-    if (attachments) {
-      const fileAttachments = attachments.filter(a => !a.isImage);
-      if (fileAttachments.length > 0) {
-        fullContent += "\n\n--- Attached Files ---\n";
-        for (const file of fileAttachments) {
-          fullContent += `\n### ${file.name}\n\`\`\`\n${file.data}\n\`\`\`\n`;
-        }
-      }
-    }
-
-    // Get messages for this conversation
-    const convMessages = conversationId ? conversations[conversationId]?.messages ?? [] : [];
-    
     // Build the payload locally to avoid race conditions with store updates
     const previous = [
-      ...convMessages.map((msg) => ({ role: msg.role, content: msg.content })),
-      { role: "user", content: fullContent },
+      ...currentMessages.map((msg) => ({ role: msg.role, content: msg.content })),
+      { role: "user", content, images: imageBase64.length > 0 ? imageBase64 : undefined },
     ];
 
-    // Prepare images for API if any
-    const images = attachments
-      ?.filter(a => a.isImage)
-      .map(a => a.data.replace(/^data:image\/\w+;base64,/, "")); // Extract base64 data
+    // Handle research mode
+    if (effectiveToolMode === "research") {
+      try {
+        // Initialize research progress
+        setResearchProgress({
+          step: 0,
+          total: 6,
+          message: "Starting research...",
+          findings: [],
+          sources: [],
+          isComplete: false,
+        });
 
+        await streamResearch(
+          content,
+          previous.slice(0, -1), // Exclude the current message from history
+          { signal: abortRef.current.signal },
+          {
+            onQuestion: (questions) => {
+              // Add clarification question as assistant message
+              console.log("Research question received:", questions);
+              appendAssistantChunk(questions);
+              // Update research progress to show we're in clarification phase
+              setResearchProgress((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      step: 0,
+                      total: 6,
+                      message: "Waiting for your response to clarification questions...",
+                    }
+                  : {
+                      step: 0,
+                      total: 6,
+                      message: "Waiting for your response to clarification questions...",
+                      findings: [],
+                      sources: [],
+                      isComplete: false,
+                    }
+              );
+            },
+            onProgress: (step, total, message) => {
+              setResearchProgress((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      step,
+                      total,
+                      message,
+                    }
+                  : {
+                      step,
+                      total,
+                      message,
+                      findings: [],
+                      sources: [],
+                      isComplete: false,
+                    }
+              );
+            },
+            onFinding: (finding) => {
+              setResearchProgress((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      findings: [...prev.findings, finding],
+                    }
+                  : {
+                      step: 0,
+                      total: 6,
+                      message: "",
+                      findings: [finding],
+                      sources: [],
+                      isComplete: false,
+                    }
+              );
+            },
+            onReport: (chunk) => {
+              appendAssistantChunk(chunk);
+            },
+            onSources: (sources) => {
+              setResearchProgress((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      sources,
+                    }
+                  : {
+                      step: 6,
+                      total: 6,
+                      message: "Research complete",
+                      findings: [],
+                      sources,
+                      isComplete: true,
+                    }
+              );
+            },
+            onDone: (data) => {
+              console.log("Research done event:", data);
+              // If it's just clarification phase, don't mark as complete
+              if (data?.phase === "clarification") {
+                setResearchProgress((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        step: 0,
+                        total: 6,
+                        message: "Waiting for your response...",
+                      }
+                    : null
+                );
+                setIsGenerating(false); // Allow user to respond
+              } else {
+                // Research is actually complete
+                setResearchProgress((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        isComplete: true,
+                        message: "Research complete",
+                      }
+                    : null
+                );
+                setIsGenerating(false);
+              }
+            },
+            onError: (error) => {
+              console.error("Research error", error);
+              appendAssistantChunk(`\n⚠️ Research error: ${error}`);
+              setIsGenerating(false);
+              setResearchProgress((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      isComplete: false,
+                      message: `Error: ${error}`,
+                    }
+                  : null
+              );
+            },
+          }
+        );
+      } catch (error) {
+        console.error("streamResearch failed", error);
+        appendAssistantChunk("\n⚠️ Unable to stream research response.");
+        setIsGenerating(false);
+        setResearchProgress(null);
+      }
+      return;
+    }
+
+    // Regular chat mode (including vision mode with images)
     try {
       await streamChat(
         previous,
-        { 
-          signal: abortRef.current.signal, 
-          model: modelToUse,
-          images: images && images.length > 0 ? images : undefined,
-        },
+        { signal: abortRef.current.signal, model: effectiveModel, images: imageBase64.length > 0 ? imageBase64 : undefined },
         {
-          onDelta: (chunk) => appendAssistantChunk(chunk, conversationId),
+          onDelta: (chunk) => appendAssistantChunk(chunk),
           onRouting: (payload) => {
             console.debug("routing payload", payload);
-            if (conversationId) {
-              setRoutingInfo(conversationId, payload);
+            if (activeId) {
+              setRoutingInfo(activeId, payload as RoutingInfo);
             }
           },
           onDone: () => {
@@ -219,14 +345,14 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
           },
           onError: (message) => {
             console.error("stream error", message);
-            appendAssistantChunk(`\n⚠️ ${message}`, conversationId);
+            appendAssistantChunk(`\n⚠️ ${message}`);
             setIsGenerating(false);
           },
         }
       );
     } catch (error) {
       console.error("streamChat failed", error);
-      appendAssistantChunk("\n⚠️ Unable to stream response.", conversationId);
+      appendAssistantChunk("\n⚠️ Unable to stream response.");
       setIsGenerating(false);
     }
   };
@@ -279,11 +405,60 @@ export default function ChatInterface({ initialMessages }: ChatInterfaceProps) {
         </div>
       )}
 
+      {/* Mode indicator with transition */}
+      {appMode !== "chat" && (
+        <div className="flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-300 animate-in fade-in slide-in-from-top-2 duration-300">
+          <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-semibold capitalize">{appMode}</span>
+          <span className="text-cyan-400/70">mode active</span>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-900/70 bg-slate-900/60 shadow-lg shadow-slate-950/30">
-        <MessageList messages={currentMessages} isGenerating={isGenerating} />
+        <MessageList 
+          messages={currentMessages} 
+          isGenerating={isGenerating}
+          toolMode={activeToolMode !== "none" ? activeToolMode : undefined}
+          modelUsed={currentModel}
+        />
+        {/* Research progress overlay */}
+        {researchProgress && (
+          <div className="border-t border-slate-800 bg-slate-900/80 p-4">
+            <ResearchProgress
+              step={researchProgress.step}
+              total={researchProgress.total}
+              message={researchProgress.message}
+              findings={researchProgress.findings}
+              sources={researchProgress.sources}
+              isComplete={researchProgress.isComplete}
+              onCancel={() => {
+                console.log("Cancelling research...");
+                abortRef.current?.abort();
+                setIsGenerating(false);
+                setResearchProgress(null);
+                appendAssistantChunk("\n\n⚠️ Research cancelled by user.");
+              }}
+              onDismiss={() => {
+                console.log("Dismissing research progress...");
+                // If research is still in progress, cancel it first
+                if (!researchProgress.isComplete) {
+                  abortRef.current?.abort();
+                  setIsGenerating(false);
+                  appendAssistantChunk("\n\n⚠️ Research cancelled.");
+                }
+                setResearchProgress(null);
+              }}
+            />
+          </div>
+        )}
       </div>
       <div className="shrink-0 rounded-2xl border border-slate-900/70 bg-slate-900/70 p-4 shadow-lg shadow-slate-950/30">
-        <MessageInput disabled={isGenerating || offline} onSend={handleSend} />
+        <MessageInput 
+          disabled={isGenerating || offline} 
+          onSend={handleSend}
+          toolMode={activeToolMode}
+          onToolModeChange={setActiveToolMode}
+        />
       </div>
     </div>
   );

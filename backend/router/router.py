@@ -30,9 +30,9 @@ TASK_TO_MODEL_TYPE = {
 class ModelRouter:
     """Intelligent model router with auto-discovery and LLM-based routing."""
 
-    def __init__(self, use_llm_routing: bool = True, routing_timeout_ms: int = 500):
+    def __init__(self, ollama_base_url: Optional[str] = None, use_llm_routing: bool = True, routing_timeout_ms: int = 500):
         self.classifier = QueryClassifier()
-        self.client = ollama.Client()
+        self.client = ollama.Client(host=ollama_base_url) if ollama_base_url else ollama.Client()
         self.registry = ModelRegistry()
         self.use_llm_routing = use_llm_routing
         self.routing_timeout_ms = routing_timeout_ms
