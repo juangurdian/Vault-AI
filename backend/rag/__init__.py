@@ -1,11 +1,5 @@
 """RAG package with vector store and deep research."""
+# Lazy imports to avoid circular dependency issues
+# Import directly from submodules instead of re-exporting here
 
-from .vector_store import VectorStore
-from .deep_research import DeepResearchPipeline, ResearchReport
-
-try:
-    from .ingestion import DocumentIngestion
-    __all__ = ["VectorStore", "DocumentIngestion", "DeepResearchPipeline", "ResearchReport"]
-except ImportError:
-    __all__ = ["VectorStore", "DeepResearchPipeline", "ResearchReport"]
-
+__all__ = ["VectorStore", "DeepResearchPipeline", "ResearchReport"]

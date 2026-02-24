@@ -1,548 +1,286 @@
-# 🔥 Local AI Beast
+# BeastAI — The Ultimate Local AI Platform
 
-**The Ultimate Local AI Platform** — Run multiple AI models intelligently on your hardware with automatic routing, multi-modal capabilities, and complete privacy.
+Run multiple AI models intelligently on your own hardware. Complete privacy, no cloud required.
 
 [![Local First](https://img.shields.io/badge/Local%20First-100%25%20Private-green)](https://github.com)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue)](https://www.docker.com/)
 [![Python](https://img.shields.io/badge/Python-3.12+-blue)](https://www.python.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 
 ---
 
-## 🎯 What Makes This Different?
+## Quick Start (Two Options)
 
-**Local AI Beast** isn't just another AI chat interface. It's an **intelligent routing system** that automatically selects the best model for each task, runs entirely on your hardware, and gives you complete control over your AI experience.
+### Option A — Docker (Recommended, one command)
 
-### 🧠 The Intelligent Router: Your AI's Brain
-
-At the heart of Local AI Beast is a **sophisticated routing system** that:
-
-- **🔍 Auto-Discovers Models**: Automatically detects all models installed in Ollama at startup
-- **📊 Profiles Each Model**: Analyzes speed, context window, capabilities, and VRAM usage
-- **🎯 Smart Selection**: Uses LLM-based routing (with regex fallback) to pick the optimal model for each query
-- **⚡ Real-Time Sync**: Continuously syncs with Ollama to detect new models you install
-- **🔄 Graceful Fallbacks**: If your ideal model isn't available, it intelligently falls back to what you have
-- **📈 Performance Tracking**: Monitors token generation speed and adjusts routing decisions
-
-**How It Works:**
-1. **Discovery Phase**: On startup, the router queries Ollama for all installed models
-2. **Profiling**: Each model is analyzed and categorized (Fast, General, Reasoning, Coding, Vision, Creative)
-3. **Classification**: When you send a query, the router classifies it using:
-   - **LLM-Based Routing** (primary): Uses a fast model to analyze your query and select the best model
-   - **Regex Fallback**: Pattern matching for reliability when LLM routing isn't available
-4. **Selection**: Picks the optimal model based on task type, context length, and available resources
-5. **Execution**: Streams responses in real-time with full transparency
-
-**Example Routing Decisions:**
-- "Write a Python function" → Routes to coding model (e.g., `qwen2.5-coder:7b`)
-- "Solve this math problem step by step" → Routes to reasoning model (e.g., `deepseek-r1:8b`)
-- "What's in this image?" → Routes to vision model (e.g., `llava:7b`)
-- "Quick question" → Routes to fast model (e.g., `qwen3:4b`)
-- Complex analysis → Routes to general model (e.g., `qwen3:8b`)
-
----
-
-## ✨ Features
-
-### 🎨 **Multi-Modal Chat Interface**
-- Beautiful, responsive UI built with Next.js 14 and Tailwind CSS
-- Real-time streaming responses
-- Markdown rendering with syntax highlighting
-- File and image attachments
-- Conversation history with persistence
-- Tool/mode indicators on messages
-- Model badges showing which model handled each response
-
-### 🔬 **Research Agent**
-- Deep web research with SearXNG integration
-- Asks clarifying questions before research
-- Multi-step research pipeline with progress tracking
-- Source citations and findings display
-- RAG integration for knowledge base queries
-
-### 🖼️ **Image Generation & Analysis**
-- Vision model support for image analysis
-- ComfyUI integration for image generation (SDXL, FLUX)
-- Image upload and preview
-- Image-to-text capabilities
-
-### 💻 **Coding Agent**
-- Specialized coding models for programming tasks
-- Code generation, debugging, and explanation
-- Syntax-aware responses
-
-### 📚 **RAG & Document Ingestion**
-- ChromaDB vector store for document embeddings
-- Document ingestion pipeline
-- Semantic search across your knowledge base
-- Deep research with RAG context
-
-### 🎛️ **Smart Routing Controls**
-- **Smart Routing Mode**: Let the AI choose the best model automatically
-- **Manual Mode**: Select specific models yourself
-- **Routing Insights**: See why each model was chosen
-- **Model Performance**: View tokens/sec and context usage
-
-### 🔒 **Privacy & Offline-First**
-- 100% local execution (optional web search)
-- No data leaves your machine
-- Conversation history stored locally
-- Works completely offline (except web research)
-
----
-
-## 🛠️ Tech Stack
-
-### Backend
-- **FastAPI** + **Uvicorn** — High-performance async API
-- **Ollama** — Local LLM runtime
-- **ChromaDB** — Vector database for RAG
-- **SearXNG** — Privacy-respecting web search
-- **ComfyUI** — Image generation backend
-
-### Frontend
-- **Next.js 14** — React framework with SSR
-- **TypeScript** — Type-safe development
-- **Tailwind CSS** — Utility-first styling
-- **Zustand** — Lightweight state management
-- **React Markdown** — Markdown rendering
-
-### Infrastructure
-- **Docker Compose** — One-command deployment
-- **GPU Support** — NVIDIA CUDA acceleration
-- **Volume Persistence** — Models and data survive restarts
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Docker Desktop** (for Docker setup) OR
-- **Python 3.12+** and **Node.js 20+** (for local development)
-- **Ollama** installed and running
-- **NVIDIA GPU** (recommended, but not required)
-
-### Option 1: Docker Compose (Recommended)
-
-**One command to rule them all:**
-
-```powershell
-# Core services (Ollama, Backend, Frontend)
-.\start_stack.ps1
-
-# With heavy services (ComfyUI + SearXNG)
-.\start_stack.ps1 -Heavy
+```bash
+# Linux / macOS
+git clone https://github.com/your-username/beastai.git
+cd beastai
+./start.sh
 ```
 
-**Access:**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8001
-- Ollama: http://localhost:11434
-- ComfyUI: http://localhost:8188 (if heavy profile)
-- SearXNG: http://localhost:8080 (if heavy profile)
-
-### Option 2: Local Development
-
-**Terminal 1 - Backend:**
 ```powershell
-.\start_backend.ps1
+# Windows
+git clone https://github.com/your-username/beastai.git
+cd beastai
+.\start.ps1
 ```
 
-**Terminal 2 - Frontend:**
-```powershell
-.\start_frontend.ps1
-```
+That's it. Docker builds and starts everything automatically.  
+Open **http://localhost:3000** when ready.
 
-**Access:** http://localhost:3000
+> **With NVIDIA GPU:**
+> ```bash
+> ./start.sh --gpu          # Linux/Mac
+> .\start.ps1 -Gpu          # Windows
+> ```
+
+> **With ComfyUI (image generation) + SearXNG (self-hosted search):**
+> ```bash
+> ./start.sh --heavy        # Linux/Mac
+> .\start.ps1 -Heavy        # Windows
+> ```
 
 ---
 
-## 📦 Installing Models
+### Option B — Local Development (No Docker)
 
-### Ollama Models
-
-The router automatically detects models you install in Ollama. Install models using:
+```bash
+# Linux / macOS
+./start.sh --dev
+```
 
 ```powershell
-# Fast chat model
-ollama pull qwen3:4b
+# Windows
+.\start.ps1 -Dev
+```
 
-# Balanced general model
-ollama pull qwen3:8b
+Requirements: **Python 3.12+**, **Node.js 20+**, **Ollama** running locally.
 
-# Reasoning model
-ollama pull deepseek-r1:8b
+---
 
-# Coding model
-ollama pull qwen2.5-coder:7b
+## Prerequisites
 
-# Vision model
-ollama pull llava:7b
+| Tool | Required | Notes |
+|------|----------|-------|
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | For Option A | With WSL2 on Windows |
+| [Ollama](https://ollama.ai/) | Always | LLM runtime |
+| Python 3.12+ | Option B only | |
+| Node.js 20+ | Option B only | |
+| NVIDIA GPU | Optional | Dramatically speeds up models |
 
-# Embedding model (for RAG)
+---
+
+## Install AI Models
+
+After starting, pull models from Ollama. The router automatically detects them:
+
+```bash
+# General chat (pick one based on your VRAM)
+ollama pull qwen3:4b    # ~3 GB  — fast, low VRAM
+ollama pull qwen3:8b    # ~5 GB  — balanced
+
+# Reasoning (shows thinking process)
+ollama pull deepseek-r1:8b   # ~5 GB
+
+# Coding
+ollama pull qwen2.5-coder:7b  # ~4 GB
+
+# Vision (image analysis)
+ollama pull llava:7b           # ~5 GB
+
+# Embeddings (required for RAG / document search)
 ollama pull nomic-embed-text
 ```
 
-**The router will automatically:**
-- Detect new models on next startup
-- Profile them with appropriate capabilities
-- Make them available for routing
-
-### Image Generation Models (ComfyUI)
-
-For image generation, download models to the ComfyUI checkpoints directory:
-
-1. Download SDXL base model: `sd_xl_base_1.0.safetensors`
-2. Place in: `comfyui_models/checkpoints/` (Docker) or your local ComfyUI models folder
-3. Restart ComfyUI service
-
-See `COMFYUI_SETUP.md` for detailed instructions.
-
 ---
 
-## 🎮 Using the Platform
+## Features
 
-### Chat Modes
+### Intelligent Model Router
+- Auto-discovers every model installed in Ollama at startup
+- Routes each query to the best model: fast → general → coding → reasoning → vision
+- LLM-based routing with regex fallback for reliability
+- Learns from your feedback to improve routing over time
 
-**Chat Mode** (Default)
-- General conversation
-- Smart routing selects best model
-- Fast responses for simple queries
-
-**Research Mode** 🔍
-- Deep web research with SearXNG
-- Asks clarifying questions
-- Multi-step research pipeline
-- Source citations
-
-**Code Mode** 💻
-- Forces coding models
-- Optimized for programming tasks
-- Code generation and debugging
-
-**Image Mode** 🖼️
-- Image analysis with vision models
-- Image generation with ComfyUI
-- Upload images for analysis
-
-### Tool Selection
-
-Use the tool dropdown to select:
-- **Research** — Deep research with web search
-- **Reasoning** — Force reasoning models
-- **Image** — Vision analysis or generation
-- **File** — Upload and analyze files
-- **Chat** — Standard conversation
-
-### Smart Routing vs Manual Mode
-
-**Smart Routing (Default):**
-- AI automatically selects the best model
-- Considers query type, context, and model capabilities
-- Shows routing insights in the UI
-
-**Manual Mode:**
-- You choose the model
-- Useful for testing or specific requirements
-- Model selector enabled in header
-
----
-
-## 🏗️ Architecture
-
-### Router System
-
-```
-User Query
-    ↓
-Query Classifier (LLM + Regex)
-    ↓
-Task Type Detection
-    ↓
-Model Registry Lookup
-    ↓
-Best Model Selection
-    ↓
-Ollama Execution
-    ↓
-Streaming Response
-```
-
-### Model Discovery Flow
-
-```
-Backend Startup
-    ↓
-Query Ollama API
-    ↓
-Get Installed Models
-    ↓
-Profile Each Model
-    ├─ Infer Type (Fast/General/Reasoning/etc.)
-    ├─ Estimate Performance
-    ├─ Set Context Window
-    └─ Configure System Prompts
-    ↓
-Register in Model Registry
-    ↓
-Available for Routing
-```
-
-### Component Architecture
-
-```
-┌─────────────────┐
-│   Frontend      │  Next.js + React
-│   (Port 3000)   │
-└────────┬────────┘
-         │ HTTP/SSE
-┌────────▼────────┐
-│    Backend      │  FastAPI
-│   (Port 8001)   │
-└────────┬────────┘
-         │
-    ┌────┴────┬──────────┬──────────┐
-    │         │          │          │
-┌───▼───┐ ┌──▼───┐  ┌───▼───┐  ┌───▼───┐
-│Ollama │ │Chroma│  │SearXNG│  │ComfyUI│
-│:11434 │ │  DB  │  │:8080  │  │:8188  │
-└───────┘ └──────┘  └───────┘  └───────┘
-```
-
----
-
-## 🔧 Configuration
-
-### Environment Variables
-
-**Backend** (`backend/.env`):
-```env
-OLLAMA_BASE_URL=http://localhost:11434
-SEARXNG_BASE_URL=http://localhost:8080
-COMFYUI_BASE_URL=http://localhost:8188
-CHROMA_DB_PATH=./data/chromadb
-```
-
-**Frontend** (`frontend/.env.local`):
-```env
-NEXT_PUBLIC_API_BASE=http://localhost:8001/api
-```
-
-### Docker Compose
-
-Edit `docker/docker-compose.yml` to customize:
-- Ports
-- GPU settings
-- Volume paths
-- Environment variables
-
----
-
-## 📊 Model Profiles
-
-The router automatically profiles models based on:
-
-- **Model Name Patterns**: Infers type from name (e.g., "coder" → coding model)
-- **Known Defaults**: Pre-configured profiles for popular models
-- **Performance Estimates**: Token/sec, VRAM usage, context window
-- **Capability Detection**: Vision, coding, reasoning capabilities
-
-**Model Types:**
-- `FAST` — Quick responses (1-4B parameters)
-- `GENERAL` — Balanced performance (7-8B parameters)
-- `REASONING` — Complex analysis (deepseek-r1, etc.)
-- `CODING` — Programming tasks
-- `VISION` — Image understanding
-- `CREATIVE` — Writing and ideation
-- `EMBEDDING` — Text embeddings (not for chat)
-
----
-
-## 🧪 Features in Detail
+### Reasoning Transparency
+- Collapsible "Thinking" block on every reasoning model response
+- Force reasoning mode on any query with the tool selector
+- Real-time streaming of the thinking process
 
 ### Research Agent
+- Deep multi-step web research pipeline
+- Asks clarifying questions before researching
+- Supports Brave Search, Perplexity, DuckDuckGo, and SearXNG (configure in Settings)
+- Source citations with progress tracking
 
-The research agent conducts deep web research:
+### Image Generation (ComfyUI)
+- Generate images from text prompts directly in chat
+- Supports SDXL, FLUX, and any ComfyUI-compatible model
+- Negative prompts, width/height/steps controls
 
-1. **Clarification Phase**: Asks questions to refine research scope
-2. **Search Phase**: Queries SearXNG for relevant sources
-3. **Analysis Phase**: Processes findings with LLM
-4. **Report Generation**: Creates comprehensive report with citations
+### Vision Analysis
+- Upload images for AI analysis
+- Automatically routes to your best vision model (LLaVA, etc.)
 
-**Usage:**
-1. Click "Research" tool or select Research mode
-2. Enter your research topic
-3. Answer clarifying questions if asked
-4. Watch progress as research unfolds
-5. Review findings and sources
+### RAG — Document Knowledge Base
+- Drag-and-drop document upload (PDF, TXT, Markdown)
+- ChromaDB vector store for semantic search
+- Documents become part of every relevant response
 
-### Image Generation
+### Coding Agent
+- Automatic routing to your best coding model
+- Code generation, debugging, and explanation
 
-Generate images using ComfyUI:
+### Conversation Persistence
+- Full conversation history stored in SQLite
+- Resumes where you left off after restarts
 
-1. Select "Image" mode or tool
-2. Enter your prompt
-3. Image is generated and displayed in chat
-4. Download or continue conversation
-
-**Supported Models:**
-- Stable Diffusion XL (SDXL)
-- FLUX
-- Any ComfyUI-compatible model
-
-### Document Ingestion (RAG)
-
-Add documents to your knowledge base:
-
-1. Upload files through the UI
-2. Documents are chunked and embedded
-3. Stored in ChromaDB vector store
-4. Available for semantic search
-5. Used in research and chat context
-
-**Supported Formats:**
-- PDF
-- Text files
-- Markdown
-- More formats coming
+### Settings Panel
+- Change API keys, model defaults, and service URLs without restarting
+- Toggle search providers and view which ones are active
 
 ---
 
-## 🗺️ Roadmap & Updates Coming
+## Architecture
 
-### ✅ Currently Working
-- ✅ Intelligent model routing with auto-discovery
-- ✅ Multi-modal chat interface
-- ✅ Research agent with web search
-- ✅ Image analysis and generation
-- ✅ Coding agent
-- ✅ Document ingestion (RAG)
-- ✅ Smart routing toggle
-- ✅ Model performance tracking
-- ✅ Responsive mobile UI
-- ✅ Conversation persistence
+```
+Browser (http://localhost:3000)
+         │
+         │  HTTP + SSE (streaming)
+         ▼
+   FastAPI Backend (port 8001)
+         │
+    ┌────┴──────────────────────────────┐
+    │                                   │
+    ▼                                   ▼
+Intelligent Router              Research Agent
+    │                                   │
+    ▼                                   ▼
+Model Registry              Web Search (Brave/Perplexity/DDG)
+    │
+    ▼
+Ollama (port 11434)
+    ├── Fast models    (qwen3:4b)
+    ├── General models (qwen3:8b)
+    ├── Reasoning      (deepseek-r1:8b)
+    ├── Coding         (qwen2.5-coder:7b)
+    └── Vision         (llava:7b)
 
-### 🚧 Coming Soon
-- 🔄 **Real-time model updates**: Router will detect new models without restart
-- 🔄 **Advanced RAG**: Better chunking, metadata, and retrieval
-- 🔄 **Agent tool execution**: Code execution, file operations
-- 🔄 **Multi-modal inputs**: Voice, video support
-- 🔄 **Model fine-tuning**: Local fine-tuning capabilities
-- 🔄 **Performance dashboard**: Detailed metrics and analytics
-- 🔄 **Plugin system**: Extensible agent and tool plugins
-- 🔄 **Collaborative features**: Share conversations and knowledge bases
-
-### 💡 Future Ideas
-- Distributed model serving
-- Model marketplace integration
-- Advanced prompt engineering tools
-- Custom agent workflows
-- API for third-party integrations
-
----
-
-## 🐛 Troubleshooting
-
-### Router Not Detecting Models
-
-**Problem:** Router shows 0 models available
-
-**Solutions:**
-1. Ensure Ollama is running: `ollama list`
-2. Check backend logs for discovery errors
-3. Verify `OLLAMA_BASE_URL` is correct
-4. Restart backend service
-
-### Models Not Routing Correctly
-
-**Problem:** Wrong model selected for task
-
-**Solutions:**
-1. Check model profiles in router logs
-2. Verify model types are correctly inferred
-3. Try manual mode to test specific models
-4. Check routing insights in UI
-
-### Frontend Connection Issues
-
-**Problem:** Frontend can't connect to backend
-
-**Solutions:**
-1. Verify backend is running on port 8001
-2. Check `NEXT_PUBLIC_API_BASE` environment variable
-3. Ensure CORS is configured correctly
-4. Check browser console for errors
-
-### GPU Not Working
-
-**Problem:** Models running slowly on CPU
-
-**Solutions:**
-1. Verify NVIDIA drivers are installed
-2. Check Docker GPU support: `docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi`
-3. Ensure WSL2 backend enabled (Windows)
-4. Verify NVIDIA Container Toolkit installed
+ChromaDB  — document vectors (RAG)
+SQLite    — conversations, feedback
+ComfyUI   — image generation (port 8188, optional)
+SearXNG   — self-hosted search (port 8080, optional)
+```
 
 ---
 
-## 📚 Documentation
+## Configuration
 
-- **[STACK_SETUP.md](STACK_SETUP.md)** — Docker Compose setup guide
-- **[COMFYUI_SETUP.md](COMFYUI_SETUP.md)** — Image generation setup
-- **[doc/DEVELOPMENT_PLAN.md](doc/DEVELOPMENT_PLAN.md)** — Development roadmap
-- **[doc/LOCAL_AI_BEAST_ARCHITECTURE.md](doc/LOCAL_AI_BEAST_ARCHITECTURE%20(1).md)** — Architecture details
+Copy `.env.example` to `.env` and set values. All settings can also be changed live through the **Settings** panel in the UI.
+
+```env
+# Service URLs (set automatically in Docker, only change for custom setups)
+OLLAMA_BASE_URL=http://localhost:11434
+COMFYUI_BASE_URL=http://localhost:8188
+SEARXNG_BASE_URL=http://localhost:8080
+
+# Optional API keys for better web search
+BRAVE_API_KEY=           # https://brave.com/search/api/
+PERPLEXITY_API_KEY=      # https://www.perplexity.ai/settings/api
+```
 
 ---
 
-## 🤝 Contributing
+## Useful Commands
 
-This is a personal project, but suggestions and feedback are welcome! Areas where contributions would be valuable:
+```bash
+# Docker
+./start.sh                  # start (CPU)
+./start.sh --gpu            # start with NVIDIA GPU
+./start.sh --gpu --heavy    # + ComfyUI + SearXNG
+./start.sh --stop           # stop everything
+./start.sh --logs           # stream logs
 
+# Windows equivalents
+.\start.ps1
+.\start.ps1 -Gpu
+.\start.ps1 -Gpu -Heavy
+.\start.ps1 -Stop
+.\start.ps1 -Logs
+
+# Docker Compose directly
+docker compose logs -f backend          # backend logs only
+docker compose restart backend          # restart one service
+docker compose exec ollama ollama pull qwen3:8b   # pull model into Docker Ollama
+```
+
+---
+
+## Troubleshooting
+
+**Ollama models not detected**
+- Ensure Ollama is running: `ollama list`
+- Check backend logs: `./start.sh --logs`
+- Restart backend to re-run model discovery
+
+**Frontend can't reach backend**
+- Verify backend is healthy: http://localhost:8001/health
+- Check `NEXT_PUBLIC_API_BASE` env var
+- In Docker, both containers must be on `beastai-network`
+
+**GPU not being used**
+- Run with `--gpu` / `-Gpu` flag
+- Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- Windows: ensure WSL2 is the Docker backend
+
+**First startup is slow**
+- Docker needs to build images on the first run (~2-5 minutes)
+- Subsequent startups are fast (cached layers)
+
+**SearXNG not working in Docker**
+- Run with `--heavy` flag to enable SearXNG
+- Or use Brave/Perplexity API keys instead (Settings panel)
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Zustand |
+| Backend | FastAPI, Python 3.12, Uvicorn |
+| LLM Runtime | Ollama |
+| Vector DB | ChromaDB |
+| Conversations | SQLite (aiosqlite) |
+| Image Gen | ComfyUI |
+| Web Search | Brave, Perplexity, DuckDuckGo, SearXNG |
+| Infrastructure | Docker Compose |
+
+---
+
+## Roadmap
+
+- [ ] Voice input/output
+- [ ] Agent tool execution (run code, file ops)
+- [ ] Real-time model discovery (no restart needed)
+- [ ] Advanced RAG chunking strategies
+- [ ] Performance analytics dashboard
+- [ ] Plugin/extension system
+- [ ] Computer control agent (OpenClaw-style)
+
+---
+
+## Contributing
+
+PRs welcome. Areas of interest:
 - Model profile improvements
-- Additional agent tools
+- New agent tools
 - UI/UX enhancements
-- Documentation improvements
-- Performance optimizations
+- Additional search providers
+- Performance optimisations
 
 ---
 
-## 📄 License
-
-This project is open source. See individual component licenses for details.
-
----
-
-## 🙏 Acknowledgments
-
-Built with amazing open-source tools:
-- [Ollama](https://ollama.ai/) — Local LLM runtime
-- [FastAPI](https://fastapi.tiangolo.com/) — Modern Python web framework
-- [Next.js](https://nextjs.org/) — React framework
-- [ChromaDB](https://www.trychroma.com/) — Vector database
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) — Image generation
-- [SearXNG](https://docs.searxng.org/) — Privacy-respecting search
-
----
-
-## 🎯 Why Local AI Beast?
-
-**Privacy**: Your data never leaves your machine. Complete control over your AI interactions.
-
-**Performance**: Intelligent routing means you get the best model for each task, maximizing efficiency.
-
-**Flexibility**: Run any Ollama-compatible model. Mix and match models for different tasks.
-
-**Transparency**: See exactly which model handled your query and why.
-
-**Offline-First**: Works completely offline (except optional web research).
-
-**No Vendor Lock-in**: Use any models you want. Switch models anytime.
-
----
-
-**Built for power. Runs local. Your personal AI beast awaits.** 🔥
-
----
-
-*Last Updated: 2024*
+Built with [Ollama](https://ollama.ai/) · [FastAPI](https://fastapi.tiangolo.com/) · [Next.js](https://nextjs.org/) · [ChromaDB](https://www.trychroma.com/) · [ComfyUI](https://github.com/comfyanonymous/ComfyUI) · [SearXNG](https://docs.searxng.org/)

@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict, Any, AsyncGenerator, Callable
+from typing import List, Optional, Dict, Any, AsyncGenerator, Callable, TYPE_CHECKING
 from dataclasses import dataclass
 import asyncio
+import json
 import logging
 
 from .vector_store import VectorStore
-from ..agents.tools.web_search import WebSearchTool
 from ..agents.tools.page_fetch import FetchPageTool
 import ollama
+
+if TYPE_CHECKING:
+    from ..agents.tools.search_service import SearchService
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +35,13 @@ class DeepResearchPipeline:
     def __init__(
         self,
         vector_store: VectorStore,
-        searxng_url: str = "http://searxng:8080",
+        search_service: "SearchService",
         planner_model: str = "deepseek-r1:8b",
         synthesizer_model: str = "qwen3:8b",
         ollama_base_url: Optional[str] = None,
     ):
         self.vector_store = vector_store
-        self.searxng_url = searxng_url
+        self.search_service = search_service
         self.planner_model = planner_model
         self.synthesizer_model = synthesizer_model
 
@@ -48,8 +51,7 @@ class DeepResearchPipeline:
         else:
             self.ollama_client = ollama.Client()
 
-        # Initialize tools
-        self.web_search = WebSearchTool(searxng_url=searxng_url)
+        # Initialize page fetch tool
         self.page_fetch = FetchPageTool()
 
     async def research(
@@ -147,7 +149,7 @@ class DeepResearchPipeline:
                 "data": {"step": 2, "total": 6, "message": f"Executing {len(queries)} search queries..."},
             }
 
-            # Step 2: Execute searches
+            # Step 2: Execute searches using SearchService
             web_results = []
             for i, query in enumerate(queries, 1):
                 yield {
@@ -155,11 +157,12 @@ class DeepResearchPipeline:
                     "data": {"step": 2, "total": 6, "message": f"Searching: {query} ({i}/{len(queries)})"},
                 }
 
-                results = await self.web_search.search(query, num_results=5)
-                web_results.extend(results)
+                results = await self.search_service.search(query, num_results=5)
+                results_dicts = self.search_service.to_dict_list(results)
+                web_results.extend(results_dicts)
 
                 # Yield findings as they come
-                for result in results:
+                for result in results_dicts:
                     yield {
                         "event_type": "finding",
                         "data": {
@@ -272,19 +275,58 @@ Generate {num_queries} diverse search queries that will cover:
 - Recent developments and news
 - Expert opinions and analysis
 - Practical applications
+- Related and opposing viewpoints
 
-Return only the search queries, one per line. No numbering or bullets."""
+Return a JSON object with a single key "queries" containing a list of the search strings.
+Example: {{"queries": ["query 1", "query 2", "query 3"]}}"""
 
         try:
-            response = self.ollama_client.chat(
-                model=self.planner_model,
-                messages=[{"role": "user", "content": prompt}],
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.ollama_client.chat(
+                    model=self.planner_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    options={"temperature": 0.1, "num_predict": 300}
+                )
+            )
+            content = response.get("message", {}).get("content", "")
+            
+            json_match = content
+            if "{" in content and "}" in content:
+                start = content.index("{")
+                end = content.rindex("}") + 1
+                json_match = content[start:end]
+            
+            parsed = json.loads(json_match)
+            if "queries" in parsed and isinstance(parsed["queries"], list):
+                return "\n".join(parsed["queries"])
+
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"Failed to parse JSON plan, falling back to simple plan: {e}")
+            # Fallback to old method if JSON fails
+            return await self._generate_simple_plan(topic, num_queries)
+        except Exception as e:
+            logger.error(f"Error generating plan: {e}")
+        
+        # Ultimate fallback
+        return f"{topic}\n{topic} overview\n{topic} recent developments"
+
+    async def _generate_simple_plan(self, topic: str, num_queries: int) -> str:
+        """Fallback to a simpler line-based plan generation."""
+        prompt = f"""Create a comprehensive research plan for: {topic}
+Generate {num_queries} diverse search queries. Return only the search queries, one per line."""
+        try:
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.ollama_client.chat(
+                    model=self.planner_model,
+                    messages=[{"role": "user", "content": prompt}],
+                )
             )
             return response.get("message", {}).get("content", "")
         except Exception as e:
-            logger.error(f"Error generating plan: {e}")
-            # Fallback: simple queries
-            return f"{topic}\n{topic} overview\n{topic} recent developments"
+            logger.error(f"Error generating simple plan: {e}")
+            return ""
 
     def _parse_queries(self, plan: str) -> List[str]:
         """Extract search queries from plan."""
@@ -302,16 +344,18 @@ Return only the search queries, one per line. No numbering or bullets."""
         queries: List[str],
         progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
     ) -> List[Dict[str, Any]]:
-        """Execute multiple search queries."""
+        """Execute multiple search queries using SearchService."""
         all_results = []
 
         for query in queries:
             try:
-                results = await self.web_search.search(query, num_results=5)
-                all_results.extend(results)
+                results = await self.search_service.search(query, num_results=5)
+                # Convert SearchResult objects to dicts
+                results_dicts = self.search_service.to_dict_list(results)
+                all_results.extend(results_dicts)
 
                 if progress_callback:
-                    progress_callback("finding", {"query": query, "results": len(results)})
+                    progress_callback("finding", {"query": query, "results": len(results_dicts)})
 
             except Exception as e:
                 logger.error(f"Search error for '{query}': {e}")
@@ -404,9 +448,12 @@ Create a report with:
 Be thorough but concise. Cite sources where relevant using [Source: URL] format."""
 
         try:
-            response = self.ollama_client.chat(
-                model=self.synthesizer_model,
-                messages=[{"role": "user", "content": prompt}],
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.ollama_client.chat(
+                    model=self.synthesizer_model,
+                    messages=[{"role": "user", "content": prompt}],
+                )
             )
 
             report_text = response.get("message", {}).get("content", "")

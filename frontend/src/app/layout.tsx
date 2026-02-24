@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,9 +12,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
+
 export const metadata: Metadata = {
-  title: "Local AI Beast",
-  description: "Offline-first custom AI platform",
+  title: "BeastAI - Ultimate Local AI",
+  description: "Offline-first custom AI platform with intelligent routing, deep research, and multimodal capabilities",
+  keywords: ["AI", "local", "offline", "LLM", "chat", "research", "vision"],
+  authors: [{ name: "BeastAI" }],
 };
 
 export default function RootLayout({
@@ -23,9 +31,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full bg-slate-950">
+    <html lang="en" className="h-full bg-[#0a0a12]">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} h-full overflow-hidden antialiased bg-slate-950 text-slate-100`}
+        className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} h-full overflow-hidden antialiased`}
       >
         {children}
       </body>

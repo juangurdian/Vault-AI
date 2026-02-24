@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-export type AppMode = "chat" | "research" | "code" | "image";
+export type AppMode = "chat" | "research" | "code" | "image" | "reasoning";
 
 type AppState = {
   mode: AppMode;

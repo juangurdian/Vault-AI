@@ -1,8 +1,10 @@
 "use client";
 
 import { ReactNode, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
+import StatusBar from "./StatusBar";
 
 type AppShellProps = {
   children: ReactNode;
@@ -12,35 +14,44 @@ export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-full overflow-hidden bg-slate-950 text-slate-100">
+    <div className="relative flex h-full overflow-hidden bg-[#09090b] text-zinc-100">
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <Sidebar />
       </div>
-      
-      {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      {/* Mobile Sidebar Drawer */}
-      <div
-        className={`fixed inset-y-0 left-0 z-50 w-[260px] transform transition-transform duration-300 ease-in-out md:hidden ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-        aria-hidden={!sidebarOpen}
-      >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
-      </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden border-l border-slate-900/60 bg-slate-950/80">
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <div className="absolute inset-0 bg-black/60" />
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Sidebar Drawer */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <div
+            className="fixed inset-y-0 left-0 z-50 w-[280px] md:hidden"
+          >
+            <Sidebar onClose={() => setSidebarOpen(false)} />
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Main content column */}
+      <div className="flex flex-1 flex-col overflow-hidden border-l border-white/[0.06] bg-[#0c0c0e]">
         <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 overflow-hidden px-4 pb-4 sm:px-6 lg:px-8">
+
+        <main className="flex-1 overflow-hidden px-3 pb-2 sm:px-4">
           {children}
         </main>
+
+        <StatusBar />
       </div>
     </div>
   );

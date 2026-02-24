@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import MessageBubble from "./MessageBubble";
 import type { Message } from "./types";
+import { Sparkles, MessageSquare, ImageIcon, Code } from "lucide-react";
 
 type MessageListProps = {
   messages: Message[];
@@ -9,6 +11,12 @@ type MessageListProps = {
   toolMode?: string;
   modelUsed?: string | null;
 };
+
+const suggestionPrompts = [
+  { icon: <MessageSquare className="h-4 w-4" />, text: "Summarize today's notes" },
+  { icon: <Code className="h-4 w-4" />, text: "Write a Python function for Fibonacci" },
+  { icon: <ImageIcon className="h-4 w-4" />, text: "Explain this image" },
+];
 
 export default function MessageList({ messages, isGenerating, toolMode, modelUsed }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -19,51 +27,64 @@ export default function MessageList({ messages, isGenerating, toolMode, modelUse
   }, [messages, isGenerating]);
 
   return (
-    <div className="scrollbar-thin flex h-full flex-col overflow-y-auto px-4 py-4">
+    <div className="flex h-full flex-col overflow-y-auto px-3 py-3">
       <div className="flex-1 space-y-3">
-        {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center">
-            <div className="max-w-md rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/10">
-                <svg className="h-6 w-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-                </svg>
-              </div>
-              <p className="text-base font-semibold text-slate-100">Welcome to Local AI Beast</p>
-              <p className="mt-2 text-sm text-slate-400">
-                Ask a question or give a task. The router will auto-select the best local model.
-              </p>
-              <div className="mt-4 space-y-2 text-left text-sm text-slate-300">
-                <div className="rounded-lg bg-slate-800/50 px-3 py-2">"Summarize today's notes"</div>
-                <div className="rounded-lg bg-slate-800/50 px-3 py-2">"Write a Python function for Fibonacci"</div>
-                <div className="rounded-lg bg-slate-800/50 px-3 py-2">"Explain this image"</div>
-              </div>
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {messages.length === 0 && (
+            <motion.div
+              className="flex h-full items-center justify-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="max-w-md rounded-2xl border border-white/[0.06] bg-[#121214] p-8 text-center">
+                {/* Logo */}
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                  <Sparkles className="h-7 w-7 text-indigo-400" />
+                </div>
 
-        {messages.map((msg) => (
-          <MessageBubble
+                <h2 className="text-xl font-semibold text-white">
+                  Welcome to BeastAI
+                </h2>
+
+                <p className="mt-2 text-sm text-zinc-500">
+                  Ask a question or give a task. The router will auto-select the best local model.
+                </p>
+
+                {/* Suggestion prompts */}
+                <div className="mt-6 space-y-2">
+                  {suggestionPrompts.map((prompt, index) => (
+                    <button
+                      key={index}
+                      className="w-full flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-zinc-400 transition-all hover:bg-white/[0.04] hover:border-indigo-500/20 hover:text-zinc-200"
+                    >
+                      <span className="text-indigo-400/80">{prompt.icon}</span>
+                      <span>{prompt.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {messages.map((msg, index) => (
+          <motion.div
             key={msg.id}
-            message={msg}
-            toolMode={msg.role === "assistant" ? toolMode : undefined}
-            modelUsed={msg.role === "assistant" ? modelUsed : undefined}
-            showMetadata={true}
-          />
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <MessageBubble
+              message={msg}
+              toolMode={msg.role === "assistant" ? toolMode : undefined}
+              modelUsed={msg.role === "assistant" ? modelUsed : undefined}
+              showMetadata={true}
+              isStreaming={isGenerating && index === messages.length - 1 && msg.role === "assistant"}
+            />
+          </motion.div>
         ))}
-
-        {isGenerating && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Assistant</p>
-              <div className="mt-2 flex items-center gap-1.5">
-                <span className="h-2 w-2 animate-bounce rounded-full bg-cyan-400 [animation-delay:-0.3s]" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-cyan-400 [animation-delay:-0.15s]" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-cyan-400" />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Scroll anchor */}
         <div ref={bottomRef} />

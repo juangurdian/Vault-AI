@@ -8,12 +8,16 @@ import json
 
 from ..router.router import ModelRouter
 from .base import AgentBase, AgentContext, AgentResult
-from .tools.web_search import WebSearchTool
+from .tools.search_service import SearchService
 from .tools.page_fetch import FetchPageTool
 from ..rag.vector_store import VectorStore
-from ..rag.deep_research import DeepResearchPipeline
 from ..config import get_settings
 import ollama
+
+# Lazy import to break circular dependency
+def _get_deep_research_pipeline():
+    from ..rag.deep_research import DeepResearchPipeline
+    return DeepResearchPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -25,24 +29,37 @@ class ResearchAgent(AgentBase):
 
     def __init__(self, router: ModelRouter, vector_store: Optional[VectorStore] = None):
         self.router = router
-        self.client = router.client  # Use router's Ollama client
-        self.reasoning_model = "deepseek-r1:8b"
-        self.synthesis_model = "qwen3:8b"
+        self.client = router.client
 
-        # Initialize tools
+        # Dynamic model selection from registry
+        from ..router.model_profiles import ModelType
+        self.reasoning_model = (
+            router.registry.get_best_model_for_type(ModelType.REASONING)
+            or "deepseek-r1:8b"
+        )
+        self.synthesis_model = (
+            router.registry.get_best_model_for_type(ModelType.GENERAL)
+            or "qwen3:8b"
+        )
+
         settings = get_settings()
-        self.web_search = WebSearchTool(searxng_url=settings.searxng_base_url)
+        self.search_service = SearchService(
+            brave_api_key=settings.brave_api_key if settings.brave_api_key else None,
+            perplexity_api_key=settings.perplexity_api_key if settings.perplexity_api_key else None,
+            searxng_url=settings.searxng_base_url,
+            provider_order=settings.search_provider_order,
+        )
         self.page_fetch = FetchPageTool()
 
-        # Initialize vector store and deep research pipeline
         if vector_store:
             self.vector_store = vector_store
         else:
             self.vector_store = VectorStore(ollama_base_url=settings.ollama_base_url)
 
+        DeepResearchPipeline = _get_deep_research_pipeline()
         self.deep_research = DeepResearchPipeline(
             vector_store=self.vector_store,
-            searxng_url=settings.searxng_base_url,
+            search_service=self.search_service,
             planner_model=self.reasoning_model,
             synthesizer_model=self.synthesis_model,
             ollama_base_url=settings.ollama_base_url,
@@ -148,6 +165,8 @@ class ResearchAgent(AgentBase):
 
     async def _generate_clarifying_questions(self, ctx: AgentContext) -> str:
         """Generate targeted clarifying questions."""
+        import asyncio
+
         prompt = f"""You are a research assistant. The user wants to research: "{ctx.query}"
 
 Generate 2-3 targeted questions to better understand their research needs. Focus on:
@@ -159,9 +178,12 @@ Generate 2-3 targeted questions to better understand their research needs. Focus
 Return only the questions, formatted naturally as if you're asking the user directly."""
 
         try:
-            response = self.client.chat(
-                model=self.reasoning_model,
-                messages=[{"role": "user", "content": prompt}],
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.chat(
+                    model=self.reasoning_model,
+                    messages=[{"role": "user", "content": prompt}],
+                )
             )
             questions = response.get("message", {}).get("content", "")
             return questions.strip()

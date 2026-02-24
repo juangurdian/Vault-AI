@@ -1,0 +1,136 @@
+version: "3.8"
+
+# BeastAI — one-command local AI stack
+# Usage:
+#   docker compose up -d                          # start everything
+#   docker compose --profile heavy up -d          # + ComfyUI + SearXNG
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d   # with NVIDIA GPU
+
+services:
+  # ──────────────────────────────────────────────
+  # Ollama — local LLM runtime
+  # ──────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: beastai-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  # ──────────────────────────────────────────────
+  # Backend — FastAPI + intelligent router
+  # ──────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: beastai-backend
+    ports:
+      - "8001:8001"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - SEARXNG_BASE_URL=http://searxng:8080
+      - COMFYUI_BASE_URL=http://comfyui:8188
+      - API_PREFIX=/api
+      - HOST=0.0.0.0
+      - PORT=8001
+    env_file:
+      - .env
+    volumes:
+      - beastai_data:/app/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ──────────────────────────────────────────────
+  # Frontend — Next.js chat UI
+  # ──────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_BASE=http://localhost:8001/api
+    container_name: beastai-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://localhost:8001/api
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # ──────────────────────────────────────────────
+  # ComfyUI — image generation (optional, --profile heavy)
+  # ──────────────────────────────────────────────
+  comfyui:
+    profiles: ["heavy"]
+    image: ghcr.io/ai-dock/comfyui:latest-cpu
+    container_name: beastai-comfyui
+    ports:
+      - "8188:8188"
+    volumes:
+      - comfyui_models:/opt/ComfyUI/models
+      - comfyui_output:/opt/ComfyUI/output
+    environment:
+      - COMFYUI_FLAGS=--listen
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8188/system_stats || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # ──────────────────────────────────────────────
+  # SearXNG — self-hosted web search (optional, --profile heavy)
+  # ──────────────────────────────────────────────
+  searxng:
+    profiles: ["heavy"]
+    image: searxng/searxng:latest
+    container_name: beastai-searxng
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker/searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  ollama_data:
+  beastai_data:
+  comfyui_models:
+  comfyui_output:
+
+networks:
+  default:
+    name: beastai-network

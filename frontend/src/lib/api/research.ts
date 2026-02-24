@@ -4,7 +4,7 @@ type ResearchEvent =
   | { type: "finding"; data: { title: string; url: string; snippet: string } }
   | { type: "report"; data: { content: string } }
   | { type: "sources"; data: { sources: string[] } }
-  | { type: "done"; data: { success: boolean; key_findings?: string[]; sources?: string[] } }
+  | { type: "done"; data: { success: boolean; key_findings?: string[]; sources?: string[]; phase?: string } }
   | { type: "error"; data: { error: string } };
 
 export type ResearchCallback = {
@@ -13,7 +13,7 @@ export type ResearchCallback = {
   onFinding?: (finding: { title: string; url: string; snippet: string }) => void;
   onReport?: (chunk: string) => void;
   onSources?: (sources: string[]) => void;
-  onDone?: (data: { success: boolean; key_findings?: string[]; sources?: string[] }) => void;
+  onDone?: (data: { success: boolean; key_findings?: string[]; sources?: string[]; phase?: string }) => void;
   onError?: (error: string) => void;
 };
 

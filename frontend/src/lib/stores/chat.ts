@@ -3,6 +3,20 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Conversation, Message, Role, RoutingInfo } from "@/components/chat/types";
 
+const CONV_API =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE) ||
+  "http://localhost:8001/api";
+
+function syncToBackend(path: string, method: string, body?: any) {
+  try {
+    fetch(`${CONV_API}${path}`, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    }).catch(() => {});
+  } catch {}
+}
+
 type ChatState = {
   conversations: Record<string, Conversation>;
   activeId: string | null;
@@ -14,7 +28,7 @@ type ChatState = {
   createConversation: (title?: string) => string;
   setActiveConversation: (id: string) => void;
   setRoutingInfo: (conversationId: string, info: RoutingInfo | null) => void;
-  addMessage: (message: { role: Role; content: string }, conversationId?: string) => void;
+  addMessage: (message: Partial<Message> & { role: Role; content: string }, conversationId?: string) => void;
   replaceMessages: (conversationId: string, messages: Message[]) => void;
   deleteConversation: (id: string) => void;
   setIsGenerating: (val: boolean) => void;
@@ -52,6 +66,11 @@ export const useChatStore = create<ChatState>()(
           conversations: { ...state.conversations, [convo.id]: convo },
           activeId: convo.id,
         }));
+        syncToBackend("/conversations", "POST", {
+          id: convo.id,
+          title: convo.title,
+          created_at: convo.createdAt,
+        });
         return convo.id;
       },
 
@@ -78,32 +97,55 @@ export const useChatStore = create<ChatState>()(
         const convId = conversationId || get().activeId;
         if (!convId) return;
 
+        const msgId = message.id || crypto.randomUUID();
+        const createdAt = message.createdAt || Date.now();
+
         set((state) => {
           const existing = state.conversations[convId];
           if (!existing) return state;
 
           const msg: Message = {
-            id: crypto.randomUUID(),
+            id: msgId,
             role: message.role,
             content: message.content,
-            createdAt: Date.now(),
+            createdAt,
+            ...(message.imageUrl ? { imageUrl: message.imageUrl } : {}),
+            ...(message.thinking ? { thinking: message.thinking } : {}),
           };
 
           const shouldUpdateTitle =
             existing.messages.length === 0 && message.role === "user" && message.content;
 
+          const newTitle = shouldUpdateTitle
+            ? (message.content || "New chat").slice(0, 60)
+            : existing.title;
+
           const updated: Conversation = {
             ...existing,
             messages: [...existing.messages, msg],
-            updatedAt: msg.createdAt,
-            title: shouldUpdateTitle
-              ? (message.content || "New chat").slice(0, 60)
-              : existing.title,
+            updatedAt: createdAt,
+            title: newTitle,
           };
+
+          if (shouldUpdateTitle) {
+            syncToBackend(`/conversations/${convId}`, "PUT", {
+              title: newTitle,
+              updated_at: createdAt,
+            });
+          }
 
           return {
             conversations: { ...state.conversations, [convId]: updated },
           };
+        });
+
+        syncToBackend(`/conversations/${convId}/messages`, "POST", {
+          id: msgId,
+          role: message.role,
+          content: message.content,
+          created_at: createdAt,
+          thinking: message.thinking || null,
+          image_url: message.imageUrl || null,
         });
       },
 
@@ -126,6 +168,7 @@ export const useChatStore = create<ChatState>()(
           const newActive = state.activeId === id ? Object.keys(rest)[0] ?? null : state.activeId;
           return { conversations: rest, activeId: newActive };
         });
+        syncToBackend(`/conversations/${id}`, "DELETE");
       },
 
       setIsGenerating: (val) => set({ isGenerating: val }),

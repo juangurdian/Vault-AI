@@ -60,9 +60,17 @@ if (-not $env:PORT) { $env:PORT = "8001" }
 if (-not $env:HOST) { $env:HOST = "0.0.0.0" }
 
 Write-Host ""
-Write-Host "Starting custom FastAPI backend..." -ForegroundColor Green
-Write-Host "   Backend URL: http://localhost:$env:PORT" -ForegroundColor Cyan
-Write-Host "   Ollama URL:  $env:OLLAMA_BASE_URL" -ForegroundColor Cyan
+Write-Host "Starting BeastAI Backend..." -ForegroundColor Green
+Write-Host "   API URL:    http://localhost:$env:PORT" -ForegroundColor Cyan
+Write-Host "   Docs:       http://localhost:$env:PORT/docs" -ForegroundColor Cyan
+Write-Host "   Ollama URL: $env:OLLAMA_BASE_URL" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Endpoints:" -ForegroundColor White
+Write-Host "   POST /api/chat/stream     - Chat with auto-routing" -ForegroundColor White
+Write-Host "   GET  /api/models          - List available models" -ForegroundColor White
+Write-Host "   POST /api/agents/research - Research agent" -ForegroundColor White
+Write-Host "   POST /api/rag/ingest      - Document ingestion" -ForegroundColor White
+Write-Host "   GET  /api/settings        - App settings" -ForegroundColor White
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop" -ForegroundColor Yellow

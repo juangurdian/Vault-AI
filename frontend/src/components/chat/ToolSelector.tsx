@@ -1,46 +1,66 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import type { ToolMode } from "./MessageInput";
+import { MessageSquare, Search, Brain, Image as ImageIcon, FileText, Check } from "lucide-react";
 
 type ToolOption = {
   mode: ToolMode;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
+  color: string;
+  bg: string;
+  border: string;
   description: string;
-  shortcut?: string;
 };
 
 const tools: ToolOption[] = [
   {
     mode: "none",
     label: "Chat",
-    icon: "💬",
-    description: "Standard chat conversation",
+    icon: <MessageSquare className="h-4 w-4" />,
+    color: "text-zinc-300",
+    bg: "bg-white/[0.05]",
+    border: "border-white/[0.08]",
+    description: "Standard conversation",
   },
   {
     mode: "research",
     label: "Research",
-    icon: "🔍",
-    description: "Deep research with web search & RAG",
+    icon: <Search className="h-4 w-4" />,
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/20",
+    description: "Deep research with web search",
   },
   {
     mode: "reasoning",
     label: "Reasoning",
-    icon: "🧠",
-    description: "Force reasoning model for complex analysis",
+    icon: <Brain className="h-4 w-4" />,
+    color: "text-violet-400",
+    bg: "bg-violet-500/10",
+    border: "border-violet-500/20",
+    description: "Complex analysis & reasoning",
   },
   {
     mode: "vision",
-    label: "Image",
-    icon: "🖼️",
-    description: "Image generation and analysis",
+    label: "Vision",
+    icon: <ImageIcon className="h-4 w-4" />,
+    color: "text-pink-400",
+    bg: "bg-pink-500/10",
+    border: "border-pink-500/20",
+    description: "Image generation & analysis",
   },
   {
     mode: "file",
     label: "File",
-    icon: "📎",
-    description: "Upload and analyze files",
+    icon: <FileText className="h-4 w-4" />,
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/20",
+    description: "Upload & analyze documents",
   },
 ];
 
@@ -53,36 +73,54 @@ type ToolSelectorProps = {
 
 export default function ToolSelector({ value, onChange, disabled, compact = false }: ToolSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
 
   const selectedTool = tools.find((t) => t.mode === value) || tools[0];
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setDropdownPos({
+      top: rect.top - 8,
+      left: rect.left,
+    });
+  }, []);
 
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
+  useEffect(() => {
+    if (!isOpen) return;
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [isOpen, updatePosition]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        buttonRef.current?.contains(target) ||
+        portalRef.current?.contains(target)
+      ) return;
+      setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        setIsOpen(false);
-      }
+      if (e.key === "Escape" && isOpen) setIsOpen(false);
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen]);
 
-  // Keyboard shortcut: Cmd/Ctrl+K to open
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k" && !isOpen && !disabled) {
@@ -94,71 +132,104 @@ export default function ToolSelector({ value, onChange, disabled, compact = fals
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, disabled]);
 
+  const dropdown = isOpen && dropdownPos && createPortal(
+    <AnimatePresence>
+      <motion.div
+        ref={portalRef}
+        className="fixed z-[9999] w-60 overflow-hidden rounded-xl border border-white/[0.08] bg-[#121214] shadow-xl"
+        style={{
+          top: dropdownPos.top,
+          left: dropdownPos.left,
+          transform: "translateY(-100%)",
+        }}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={{ duration: 0.15 }}
+      >
+        <div className="border-b border-white/[0.06] px-3 py-2.5">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">Select Mode</p>
+        </div>
+
+        <div className="p-1.5 space-y-0.5">
+          {tools.map((tool) => (
+            <button
+              key={tool.mode}
+              type="button"
+              onClick={() => {
+                onChange(tool.mode);
+                setIsOpen(false);
+              }}
+              className={`
+                group w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-all
+                ${value === tool.mode
+                  ? `${tool.bg} ${tool.border} border`
+                  : "hover:bg-white/[0.03]"
+                }
+              `}
+            >
+              <div
+                className={`
+                  flex h-8 w-8 items-center justify-center rounded-lg
+                  ${value === tool.mode
+                    ? `${tool.bg} ${tool.color} border ${tool.border}`
+                    : `bg-white/[0.05] text-zinc-500 group-hover:text-zinc-300`
+                  }
+                `}
+              >
+                {tool.icon}
+              </div>
+
+              <div className="flex-1">
+                <div className={`font-medium ${value === tool.mode ? tool.color : "text-zinc-300"}`}>
+                  {tool.label}
+                </div>
+                <div className="text-[10px] text-zinc-600 leading-tight">{tool.description}</div>
+              </div>
+
+              {value === tool.mode && (
+                <Check className={`h-4 w-4 ${tool.color}`} />
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="border-t border-white/[0.06] px-3 py-2">
+          <p className="text-[9px] text-zinc-700">
+            Press <kbd className="rounded bg-white/[0.05] px-1 font-mono text-zinc-600">Ctrl+K</kbd> to toggle
+          </p>
+        </div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body
+  );
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
-          value !== "none"
-            ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-300"
-            : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-cyan-500/30 hover:text-cyan-200 hover:bg-slate-900/80"
-        } ${disabled ? "cursor-not-allowed opacity-50" : ""} ${compact ? "px-2 py-1" : ""}`}
+        className={`
+          inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all
+          ${value !== "none"
+            ? `${selectedTool.bg} ${selectedTool.color} ${selectedTool.border} border`
+            : "bg-white/[0.05] text-zinc-500 border border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-300"
+          }
+          ${disabled ? "cursor-not-allowed opacity-50" : ""}
+          ${compact ? "px-2 py-1" : ""}
+        `}
         title={selectedTool.description}
-        aria-label={`Select tool. Current: ${selectedTool.label}`}
-        aria-expanded={isOpen}
-        aria-haspopup="true"
       >
-        <span>{selectedTool.icon}</span>
+        {selectedTool.icon}
         {!compact && <span>{selectedTool.label}</span>}
-        <svg
-          className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
+        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-56 animate-in fade-in slide-in-from-top-2 rounded-lg border border-slate-800 bg-slate-900 shadow-xl duration-200">
-          <div className="p-1">
-            {tools.map((tool) => (
-              <button
-                key={tool.mode}
-                type="button"
-                onClick={() => {
-                  onChange(tool.mode);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
-                  value === tool.mode
-                    ? "bg-cyan-500/10 text-cyan-300"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-slate-100"
-                }`}
-              >
-                <span className="text-base">{tool.icon}</span>
-                <div className="flex-1">
-                  <div className="font-medium">{tool.label}</div>
-                  <div className="text-xs text-slate-500">{tool.description}</div>
-                </div>
-                {value === tool.mode && (
-                  <svg className="h-4 w-4 text-cyan-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
-

@@ -12,6 +12,7 @@ class TaskType(str, Enum):
     CODING = "coding"
     VISION = "vision"
     CREATIVE = "creative"
+    RESEARCH = "research"
 
 
 @dataclass
@@ -22,6 +23,8 @@ class ClassificationResult:
     complexity_score: float
     keywords_found: list[str]
     reasoning: str
+    needs_web_search: bool = False
+    web_search_reason: str = ""
 
 
 class QueryClassifier:
@@ -62,6 +65,37 @@ class QueryClassifier:
         r'\b(see|look|appear|visible|display|show)\b'
     ]
 
+    # Web search detection patterns
+    WEB_SEARCH_PATTERNS = [
+        r'\b(search|lookup|find online|google|look up|search the web)\b',
+        r'\b(latest|recent|current|today|news|now|breaking)\b',
+        r'\b(price of|weather in|stock price|score|election results)\b',
+        r'\b(2024|2025|2026|this year|this month|this week|yesterday)\b',
+        r'\b(trending|viral|popular right now)\b',
+    ]
+
+    # Explicit triggers that strongly indicate web search is needed
+    EXPLICIT_SEARCH_TRIGGERS = [
+        "search the web",
+        "search online",
+        "look it up",
+        "google it",
+        "find online",
+        "what's happening",
+        "latest news",
+        "current events",
+        "search for",
+        "look up online",
+    ]
+
+    # Time-sensitive question patterns
+    TIME_SENSITIVE_PATTERNS = [
+        r'\b(who is the current|what is the latest|when did .* happen)\b',
+        r'\b(how much does .* cost|what is the price)\b',
+        r'\b(where is .* now|what happened to)\b',
+        r'\b(is .* still|has .* changed)\b',
+    ]
+
     def __init__(self):
         """Initialize classifier with compiled regex patterns."""
         self.reasoning_regex = re.compile(
@@ -80,6 +114,14 @@ class QueryClassifier:
             '|'.join(self.VISION_PATTERNS),
             re.IGNORECASE
         )
+        self.web_search_regex = re.compile(
+            '|'.join(self.WEB_SEARCH_PATTERNS),
+            re.IGNORECASE
+        )
+        self.time_sensitive_regex = re.compile(
+            '|'.join(self.TIME_SENSITIVE_PATTERNS),
+            re.IGNORECASE
+        )
 
     def classify(
         self,
@@ -93,6 +135,9 @@ class QueryClassifier:
         query_lower = query.lower()
         word_count = len(query.split())
 
+        # Check if web search is needed
+        needs_search, search_reason = self._check_web_search_needed(query)
+
         # Vision takes priority if images are present
         if has_images:
             vision_matches = len(self.vision_regex.findall(query))
@@ -102,7 +147,9 @@ class QueryClassifier:
                     confidence=0.95,
                     complexity_score=self._calculate_complexity(query),
                     keywords_found=self.vision_regex.findall(query),
-                    reasoning="Images detected with vision-related keywords"
+                    reasoning="Images detected with vision-related keywords",
+                    needs_web_search=needs_search,
+                    web_search_reason=search_reason,
                 )
 
         # Check for code blocks or strong coding indicators
@@ -114,7 +161,9 @@ class QueryClassifier:
                 confidence=confidence,
                 complexity_score=self._calculate_complexity(query),
                 keywords_found=self.coding_regex.findall(query),
-                reasoning=f"Found {coding_matches} coding-related keywords"
+                reasoning=f"Found {coding_matches} coding-related keywords",
+                needs_web_search=needs_search,
+                web_search_reason=search_reason,
             )
 
         # Check for reasoning patterns
@@ -126,7 +175,9 @@ class QueryClassifier:
                 confidence=confidence,
                 complexity_score=self._calculate_complexity(query),
                 keywords_found=self.reasoning_regex.findall(query),
-                reasoning=f"Found {reasoning_matches} reasoning-related keywords"
+                reasoning=f"Found {reasoning_matches} reasoning-related keywords",
+                needs_web_search=needs_search,
+                web_search_reason=search_reason,
             )
 
         # Check for creative tasks
@@ -138,30 +189,99 @@ class QueryClassifier:
                 confidence=confidence,
                 complexity_score=self._calculate_complexity(query),
                 keywords_found=self.creative_regex.findall(query),
-                reasoning=f"Found {creative_matches} creative-related keywords"
+                reasoning=f"Found {creative_matches} creative-related keywords",
+                needs_web_search=needs_search,
+                web_search_reason=search_reason,
+            )
+
+        # If web search is strongly needed and no other type matched, classify as research
+        if needs_search:
+            complexity = self._calculate_complexity(query)
+            return ClassificationResult(
+                task_type=TaskType.RESEARCH,
+                confidence=0.75,
+                complexity_score=complexity,
+                keywords_found=[],
+                reasoning=f"Research query requiring web search: {search_reason}",
+                needs_web_search=needs_search,
+                web_search_reason=search_reason,
             )
 
         # Heuristic-based classification for simple vs general queries
         complexity = self._calculate_complexity(query)
 
-        # Very short queries are likely simple chat
         if word_count < 10 and complexity < 0.3:
             return ClassificationResult(
                 task_type=TaskType.SIMPLE_CHAT,
                 confidence=0.7,
                 complexity_score=complexity,
                 keywords_found=[],
-                reasoning=f"Short query ({word_count} words) with low complexity"
+                reasoning=f"Short query ({word_count} words) with low complexity",
+                needs_web_search=needs_search,
+                web_search_reason=search_reason,
             )
 
-        # Default to general
         return ClassificationResult(
             task_type=TaskType.GENERAL,
             confidence=0.6,
             complexity_score=complexity,
             keywords_found=[],
-            reasoning="Default classification - general conversation"
+            reasoning="Default classification - general conversation",
+            needs_web_search=needs_search,
+            web_search_reason=search_reason,
         )
+
+    def _check_web_search_needed(self, query: str) -> tuple[bool, str]:
+        """
+        Check if web search is needed for the query.
+        
+        Returns:
+            Tuple of (needs_search: bool, reason: str)
+        """
+        query_lower = query.lower()
+
+        # Check explicit triggers first (highest priority)
+        for trigger in self.EXPLICIT_SEARCH_TRIGGERS:
+            if trigger in query_lower:
+                return True, f"Explicit search trigger: '{trigger}'"
+
+        # Check time-sensitive patterns
+        time_match = self.time_sensitive_regex.search(query)
+        if time_match:
+            return True, f"Time-sensitive query: {time_match.group()}"
+
+        # Check general web search patterns
+        search_matches = self.web_search_regex.findall(query)
+        if len(search_matches) >= 2:
+            # Multiple indicators suggest web search
+            return True, f"Multiple search indicators: {search_matches[:3]}"
+
+        # Check for specific year references (likely current events)
+        if re.search(r'\b(2024|2025|2026)\b', query):
+            # Year reference with question words
+            if re.search(r'\b(who|what|where|when|how|why)\b', query_lower):
+                return True, "Year reference with question - likely current events"
+
+        # Check for news/current event indicators
+        news_indicators = ['news about', 'update on', 'latest on', 'what happened']
+        for indicator in news_indicators:
+            if indicator in query_lower:
+                return True, f"News indicator: '{indicator}'"
+
+        return False, ""
+
+    def needs_web_search(self, query: str) -> bool:
+        """
+        Quick check if query needs web search.
+        
+        Args:
+            query: User query
+            
+        Returns:
+            True if web search is likely needed
+        """
+        needs_search, _ = self._check_web_search_needed(query)
+        return needs_search
 
     def _calculate_complexity(self, query: str) -> float:
         """Calculate query complexity score from 0.0 to 1.0."""
@@ -225,6 +345,12 @@ class QueryClassifier:
                 "reason": "Creative tasks benefit from larger context window",
                 "expected_speed": "35+ tok/s",
                 "max_tokens": 8192
+            },
+            TaskType.RESEARCH: {
+                "model": "qwen3:8b",
+                "reason": "Research tasks need broad knowledge and tool usage",
+                "expected_speed": "35+ tok/s",
+                "max_tokens": 8192
             }
         }
 
@@ -241,5 +367,7 @@ class QueryClassifier:
             "task_type": classification.task_type.value,
             "confidence": classification.confidence,
             "complexity": classification.complexity_score,
-            "keywords": [str(kw) for kw in classification.keywords_found[:5]]  # Limit keywords and convert to strings
+            "keywords": [str(kw) for kw in classification.keywords_found[:5]],  # Limit keywords and convert to strings
+            "needs_web_search": classification.needs_web_search,
+            "web_search_reason": classification.web_search_reason,
         }

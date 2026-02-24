@@ -1,0 +1,41 @@
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "BeastAI Search"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "beastai-searxng-secret-change-me"
+  limiter: false
+  image_proxy: false
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+  center_alignment: false
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+  - name: bing
+    engine: bing
+    shortcut: b
+    disabled: false
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false

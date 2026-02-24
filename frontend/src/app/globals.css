@@ -1,19 +1,60 @@
 @import "tailwindcss";
 
 @layer base {
-:root {
+  :root {
     color-scheme: dark;
-    --background: #020617;
-    --foreground: #e2e8f0;
-    --app-text-scale: 1;
-}
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+    /* Core Design Tokens - Premium Minimal Palette */
+    --background: #09090b;
+    --background-secondary: #121214;
+    --background-tertiary: #1a1a1e;
+    --background-elevated: #202024;
+    
+    --foreground: #fafafa;
+    --foreground-muted: #a1a1aa;
+    --foreground-subtle: #71717a;
+    
+    /* Primary Accent - Single cohesive color (Indigo/Violet) */
+    --accent: #6366f1;
+    --accent-light: #818cf8;
+    --accent-dark: #4f46e5;
+    --accent-subtle: rgba(99, 102, 241, 0.1);
+    --accent-border: rgba(99, 102, 241, 0.2);
+    
+    /* Secondary Accents - For specific states */
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    
+    /* User Message Color - Distinct but complementary */
+    --user-bg: #1e3a5f;
+    --user-bg-light: #23476f;
+    --user-border: #3b82f6;
+    
+    /* AI Message Color */
+    --ai-bg: #18181b;
+    --ai-border: #27272a;
+
+    /* Border Colors */
+    --border: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.14);
+
+    /* Spacing */
+    --app-text-scale: 1;
+    --sidebar-width: 280px;
+
+    /* Animation Timing - Smoother, more subtle */
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
+  }
 
   html,
   body {
@@ -21,32 +62,237 @@
     overflow: hidden;
     word-break: break-word;
     font-size: calc(1rem * var(--app-text-scale, 1));
-    background: #020617;
-}
-
-body {
-    background: radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.08), transparent 30%),
-      radial-gradient(circle at 80% 0%, rgba(94, 234, 212, 0.08), transparent 25%),
-      #020617;
-  color: var(--foreground);
+    background: var(--background);
     font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Custom scrollbar for chat */
-  .scrollbar-thin::-webkit-scrollbar {
+  /* ───────────────────────────────────────────────
+     Clean Background - Subtle gradient only
+  ─────────────────────────────────────────────── */
+  body {
+    background: linear-gradient(180deg, #09090b 0%, #0c0c0e 100%);
+    color: var(--foreground);
+  }
+
+  /* ───────────────────────────────────────────────
+     Scrollbar - Minimal Dark Style
+  ─────────────────────────────────────────────── */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(113, 113, 122, 0.3) transparent;
+  }
+
+  *::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
 
-  .scrollbar-thin::-webkit-scrollbar-track {
+  *::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(100, 116, 139, 0.4);
-    border-radius: 3px;
+  *::-webkit-scrollbar-thumb {
+    background: rgba(113, 113, 122, 0.3);
+    border-radius: 6px;
+    transition: background 0.2s ease;
   }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(100, 116, 139, 0.6);
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(113, 113, 122, 0.5);
+  }
+
+  /* ───────────────────────────────────────────────
+     Focus States - Clean ring
+  ─────────────────────────────────────────────── */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--accent);
+  }
+
+  /* ───────────────────────────────────────────────
+     Selection - Subtle accent
+  ─────────────────────────────────────────────── */
+  ::selection {
+    background: var(--accent-subtle);
+    color: var(--accent-light);
+  }
+}
+
+/* ───────────────────────────────────────────────
+   Animation Keyframes - Minimal, purposeful
+─────────────────────────────────────────────── */
+
+/* Message Entrance - Quick fade up */
+@keyframes message-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fade Up */
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Subtle pulse for typing */
+@keyframes typing-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ───────────────────────────────────────────────
+   Utility Classes
+─────────────────────────────────────────────── */
+
+/* Animation Classes */
+.animate-message-enter {
+  animation: message-enter 0.25s var(--ease-smooth) both;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.3s var(--ease-smooth) both;
+}
+
+/* Typing indicator */
+.typing-dot {
+  animation: typing-pulse 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ───────────────────────────────────────────────
+   Glass/Elevated Surfaces - Minimal
+─────────────────────────────────────────────── */
+
+.surface {
+  background: var(--background-secondary);
+  border: 1px solid var(--border);
+}
+
+.surface-elevated {
+  background: var(--background-tertiary);
+  border: 1px solid var(--border);
+}
+
+.surface-floating {
+  background: var(--background-elevated);
+  border: 1px solid var(--border-hover);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ───────────────────────────────────────────────
+   Message Styles
+─────────────────────────────────────────────── */
+
+.message-user {
+  background: var(--user-bg);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-left: 3px solid var(--user-border);
+}
+
+.message-ai {
+  background: var(--ai-bg);
+  border: 1px solid var(--ai-border);
+  border-left: 3px solid var(--accent);
+}
+
+/* ───────────────────────────────────────────────
+   Input Styles - Clean focus
+─────────────────────────────────────────────── */
+
+.input-clean {
+  background: var(--background-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  color: var(--foreground);
+  transition: all 0.15s ease;
+}
+
+.input-clean:focus {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.input-clean::placeholder {
+  color: var(--foreground-subtle);
+}
+
+/* ───────────────────────────────────────────────
+   Button Styles - Premium minimal
+─────────────────────────────────────────────── */
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.btn-primary:hover {
+  background: var(--accent-light);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--background-tertiary);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--background-elevated);
+  border-color: var(--border-hover);
+}
+
+/* ───────────────────────────────────────────────
+   Gradient Text - Subtle
+─────────────────────────────────────────────── */
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent-light), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ───────────────────────────────────────────────
+   Reduced Motion Support
+─────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -50,15 +50,31 @@ class RoutingStatsResponse(BaseModel):
 
 
 @router.get("", response_model=ModelsResponse)
-async def list_models(model_router: ModelRouter = Depends(get_model_router)):
-    """List all available models with their profiles."""
-    chat_models = model_router.get_chat_models()
+async def list_models(
+    model_router: ModelRouter = Depends(get_model_router),
+    include_all: bool = False
+):
+    """List all available models with their profiles.
+    
+    Args:
+        include_all: If True, returns all models including embeddings. 
+                     If False, returns only chat-suitable models (default).
+    """
+    if include_all:
+        # Return all available models (including embeddings)
+        all_models = model_router.get_available_models()
+        models_list = [ModelInfo(**m) for m in all_models.values()]
+    else:
+        # Return only chat-suitable models (excludes embeddings)
+        chat_models = model_router.get_chat_models()
+        models_list = [ModelInfo(**m) for m in chat_models]
+    
     routing_model = model_router.registry.get_routing_model()
     
     return ModelsResponse(
-        models=[ModelInfo(**m) for m in chat_models],
+        models=models_list,
         routing_model=routing_model,
-        total_available=len(chat_models)
+        total_available=len(models_list)
     )
 
 

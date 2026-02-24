@@ -1,10 +1,24 @@
 export type Role = "user" | "assistant" | "system";
 
+export type ToolUsage = {
+  name: string;
+  args?: Record<string, any>;
+  success?: boolean;
+  resultPreview?: string;
+};
+
 export type Message = {
   id: string;
   role: Role;
   content: string;
   createdAt: number;
+  error?: boolean;
+  /** Optional image data URL — shown as an attached image in the bubble */
+  imageUrl?: string;
+  /** Chain-of-thought reasoning from models like DeepSeek-R1 */
+  thinking?: string;
+  /** Tools that were invoked to produce this response */
+  toolsUsed?: ToolUsage[];
 };
 
 export type Conversation = {
@@ -47,4 +61,3 @@ export type RoutingInfo = {
     reasoning?: string;
   };
 };
-

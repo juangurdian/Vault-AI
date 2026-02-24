@@ -1,0 +1,32 @@
+# GPU override — apply on top of docker-compose.yml to enable NVIDIA GPU acceleration
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile heavy up -d
+#
+# Requirements:
+#   - NVIDIA GPU with drivers installed
+#   - NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#   - Windows: WSL2 with CUDA support
+
+version: "3.8"
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  comfyui:
+    image: ghcr.io/ai-dock/comfyui:latest-cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

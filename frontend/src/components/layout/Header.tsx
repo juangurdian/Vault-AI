@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAppStore, AppMode } from "@/lib/stores/app";
+import { motion } from "framer-motion";
 import { useOffline } from "@/lib/hooks/useOffline";
 import { useChatStore } from "@/lib/stores/chat";
+import { Sparkles, Brain, Hand, Menu } from "lucide-react";
 
 type ModelInfo = {
   name: string;
@@ -23,15 +24,13 @@ type HeaderProps = {
 };
 
 export default function Header({ onMenuClick }: HeaderProps = {}) {
-  const mode = useAppStore((s) => s.mode);
-  const setMode = useAppStore((s) => s.setMode);
   const offline = useOffline();
-  
+
   const selectedModel = useChatStore((s) => s.selectedModel);
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
   const smartRoutingEnabled = useChatStore((s) => s.smartRoutingEnabled);
   const setSmartRoutingEnabled = useChatStore((s) => s.setSmartRoutingEnabled);
-  
+
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [routerStatus, setRouterStatus] = useState<"online" | "offline" | "checking">("checking");
 
@@ -39,7 +38,10 @@ export default function Header({ onMenuClick }: HeaderProps = {}) {
   useEffect(() => {
     async function fetchModels() {
       try {
-        const response = await fetch(`${API_BASE}/models`);
+        const url = smartRoutingEnabled
+          ? `${API_BASE}/models`
+          : `${API_BASE}/models?include_all=true`;
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setModels(data.models || []);
@@ -51,24 +53,23 @@ export default function Header({ onMenuClick }: HeaderProps = {}) {
         setRouterStatus("offline");
       }
     }
-    
+
     fetchModels();
-    // Refresh every 30 seconds
     const interval = setInterval(fetchModels, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [smartRoutingEnabled]);
 
   const status = useMemo(
     () => [
-      { 
-        label: "Router", 
-        state: routerStatus, 
-        color: routerStatus === "online" ? "bg-emerald-400" : routerStatus === "checking" ? "bg-yellow-400" : "bg-red-400" 
+      {
+        label: "Router",
+        state: routerStatus,
+        color: routerStatus === "online" ? "bg-emerald-500" : routerStatus === "checking" ? "bg-amber-500" : "bg-red-500",
       },
-      { 
-        label: "Network", 
-        state: offline ? "offline" : "online", 
-        color: offline ? "bg-amber-400" : "bg-emerald-400" 
+      {
+        label: "Network",
+        state: offline ? "offline" : "online",
+        color: offline ? "bg-amber-500" : "bg-emerald-500",
       },
     ],
     [offline, routerStatus]
@@ -86,59 +87,56 @@ export default function Header({ onMenuClick }: HeaderProps = {}) {
     return grouped;
   }, [models]);
 
-  // Get the effective model (what will actually be used)
   const effectiveModel = smartRoutingEnabled ? "auto" : selectedModel;
 
-  // Handle toggle change
   const handleToggle = () => {
     const newEnabled = !smartRoutingEnabled;
     setSmartRoutingEnabled(newEnabled);
-    
-    // When enabling smart routing, ensure model is set to auto
     if (newEnabled) {
       setSelectedModel("auto");
     } else if (selectedModel === "auto" && models.length > 0) {
-      // When disabling, default to first available model if currently on auto
       setSelectedModel(models[0].name);
     }
   };
 
   return (
-    <header className="shrink-0 border-b border-slate-900/70 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
+    <header className="shrink-0 border-b border-white/[0.06] bg-[#09090b] px-4 py-3 sm:px-6">
       <div className="flex items-center justify-between gap-4">
-        {/* Left: Menu button (mobile) + Title + Status */}
+        {/* Left: Menu button + Logo + Status */}
         <div className="flex items-center gap-4">
           {onMenuClick && (
             <button
               onClick={onMenuClick}
-              className="md:hidden rounded p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-              aria-label="Toggle menu"
+              className="md:hidden rounded-lg p-2 text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
             >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <Menu className="h-5 w-5" />
             </button>
           )}
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-slate-50">Local AI Beast</h1>
-              <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </span>
+
+          {/* Logo */}
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+              <Sparkles className="h-4 w-4 text-indigo-400" />
             </div>
-            <p className="text-xs text-slate-500">
-              {routerStatus === "online" 
-                ? `${models.length} models • ${smartRoutingEnabled ? "Smart routing" : "Manual mode"}`
-                : "Connecting to router..."}
-            </p>
+
+            <div>
+              <h1 className="text-lg font-semibold text-white">
+                BeastAI
+              </h1>
+              <p className="text-[11px] text-zinc-600">
+                {routerStatus === "online"
+                  ? `${models.length} models • ${smartRoutingEnabled ? "Smart" : "Manual"}`
+                  : "Connecting..."}
+              </p>
+            </div>
           </div>
-          
+
           {/* Status indicators */}
-          <div className="hidden items-center gap-2 sm:flex">
+          <div className="hidden items-center gap-3 sm:flex">
             {status.map((item) => (
               <span
                 key={item.label}
-                className="inline-flex items-center gap-1.5 rounded-full bg-slate-900/80 px-2.5 py-1 text-[10px] text-slate-300 ring-1 ring-slate-800"
+                className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-zinc-500 border border-white/[0.06]"
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${item.color}`} />
                 {item.label}
@@ -148,51 +146,62 @@ export default function Header({ onMenuClick }: HeaderProps = {}) {
         </div>
 
         {/* Right: Smart routing toggle + Model selector */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-3">
           {/* Smart Routing Toggle */}
           <button
             onClick={handleToggle}
-            className={`group flex items-center gap-1.5 sm:gap-2 rounded-lg border px-2 sm:px-3 py-1.5 text-xs font-medium transition ${
-              smartRoutingEnabled
-                ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
-                : "border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300"
-            }`}
-            title={smartRoutingEnabled ? "Smart routing is ON - AI selects the best model" : "Smart routing is OFF - You choose the model"}
+            className={`
+              group relative flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all
+              ${smartRoutingEnabled
+                ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
+                : "bg-white/5 text-zinc-500 border border-white/[0.06] hover:bg-white/[0.08]"
+              }
+            `}
           >
-            {/* Toggle indicator */}
-            <div className={`relative h-4 w-7 rounded-full transition-colors ${
-              smartRoutingEnabled ? "bg-cyan-500" : "bg-slate-700"
-            }`}>
-              <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
-                smartRoutingEnabled ? "translate-x-3.5" : "translate-x-0.5"
-              }`} />
+            {/* Toggle track */}
+            <div className={`
+              relative h-4 w-7 rounded-full transition-colors
+              ${smartRoutingEnabled ? "bg-indigo-500" : "bg-zinc-700"}
+            `}>
+              <motion.div
+                className="absolute top-0.5 h-3 w-3 rounded-full bg-white"
+                animate={{ x: smartRoutingEnabled ? 14 : 2 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              />
             </div>
+
             <span className="hidden sm:inline">
               {smartRoutingEnabled ? "Smart" : "Manual"}
             </span>
-            {/* Brain/Hand icon */}
-            <span className="text-sm">
-              {smartRoutingEnabled ? "🧠" : "✋"}
-            </span>
+
+            {smartRoutingEnabled ? (
+              <Brain className="h-3.5 w-3.5" />
+            ) : (
+              <Hand className="h-3.5 w-3.5" />
+            )}
           </button>
 
           {/* Model selector */}
-          <div className="flex items-center gap-2">
-            <select
-              className={`min-w-[120px] sm:min-w-[160px] rounded-lg border px-2 sm:px-3 py-1.5 text-xs outline-none ring-1 ring-transparent transition focus:ring-cyan-500 ${
-                smartRoutingEnabled
-                  ? "cursor-not-allowed border-slate-800 bg-slate-900/50 text-slate-500"
-                  : "border-slate-700 bg-slate-900 text-slate-100 hover:border-slate-600"
-              }`}
-              value={effectiveModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              disabled={smartRoutingEnabled}
-              aria-label="Select model"
-            >
+          <div className="relative">
+            <div className={`
+              min-w-[140px] sm:min-w-[180px] rounded-lg border bg-white/5 px-3 py-2 text-xs
+              ${smartRoutingEnabled
+                ? "cursor-not-allowed border-white/[0.04] text-zinc-600"
+                : "border-white/[0.08] text-zinc-300 hover:border-white/[0.12]"
+              }
+            `}>
               {smartRoutingEnabled ? (
-                <option value="auto">Auto (AI selects)</option>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                  <span className="text-indigo-300/80">Auto</span>
+                </div>
               ) : (
-                <>
+                <select
+                  className="w-full appearance-none bg-transparent text-xs outline-none cursor-pointer"
+                  value={effectiveModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={smartRoutingEnabled}
+                >
                   {Object.entries(modelsByType).map(([type, typeModels]) => (
                     <optgroup key={type} label={type.charAt(0).toUpperCase() + type.slice(1)}>
                       {typeModels.map((m) => (
@@ -202,28 +211,20 @@ export default function Header({ onMenuClick }: HeaderProps = {}) {
                       ))}
                     </optgroup>
                   ))}
-                </>
+                </select>
               )}
-            </select>
+            </div>
+
+            {/* Dropdown arrow */}
+            {!smartRoutingEnabled && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                <svg className="h-4 w-4 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Agent mode tabs */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 overflow-x-auto">
-        {(["chat", "research", "code", "image"] as AppMode[]).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`shrink-0 rounded-lg border px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition ${
-              mode === m
-                ? "border-cyan-500 bg-cyan-500/20 text-cyan-100"
-                : "border-slate-800 bg-slate-900/60 text-slate-200 hover:border-cyan-500/50 hover:text-cyan-200"
-            }`}
-          >
-            {m === "chat" ? "Chat" : m === "research" ? "Research" : m === "code" ? "Code" : "Image"}
-          </button>
-        ))}
       </div>
     </header>
   );

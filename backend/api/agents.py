@@ -5,11 +5,10 @@ from typing import List, Dict, Any, Optional
 import json
 import logging
 
-from ..deps import get_model_router
+from ..deps import get_model_router, get_vector_store
 from ..router.router import ModelRouter
 from ..agents import AgentManager, AgentContext
 from ..rag.vector_store import VectorStore
-from ..config import get_settings
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 logger = logging.getLogger(__name__)
@@ -28,12 +27,6 @@ class AgentResponse(BaseModel):
     result: Optional[str] = None
     model_used: Optional[str] = None
     routing_info: Optional[Dict[str, Any]] = None
-
-
-def get_vector_store() -> VectorStore:
-    """Get vector store instance."""
-    settings = get_settings()
-    return VectorStore(ollama_base_url=settings.ollama_base_url)
 
 
 def get_agent_manager(

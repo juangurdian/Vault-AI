@@ -17,11 +17,9 @@ torch
 websockets
 python-socketio
 aiofiles
-python-jose[cryptography]
-cryptography
-bcrypt
-argon2-cffi
-passlib[bcrypt]
+aiosqlite
 python-dotenv
 trafilatura
+duckduckgo-search>=6.0.0
+psutil>=5.9.0
 

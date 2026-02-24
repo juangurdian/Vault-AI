@@ -5,8 +5,9 @@ import logging
 from datetime import datetime
 
 from .config import get_settings
-from .deps import get_model_router
-from .api import chat, agents, rag, models
+from .deps import get_model_router, get_tool_registry
+from .api import chat, agents, rag, models, feedback, image, conversations, system, preferences
+from .api import settings as settings_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 app = FastAPI(
-    title="Local AI Beast",
+    title="LocalAI",
     description="Unified backend with intelligent routing and agents",
     version="1.1.0",
     docs_url="/docs",
@@ -33,6 +34,18 @@ app.include_router(chat.router, prefix=settings.api_prefix)
 app.include_router(models.router, prefix=settings.api_prefix)
 app.include_router(agents.router, prefix=settings.api_prefix)
 app.include_router(rag.router, prefix=settings.api_prefix)
+app.include_router(feedback.router, prefix=settings.api_prefix)
+app.include_router(image.router, prefix=settings.api_prefix)
+app.include_router(settings_api.router, prefix=settings.api_prefix)
+app.include_router(conversations.router, prefix=settings.api_prefix)
+app.include_router(system.router, prefix=settings.api_prefix)
+app.include_router(preferences.router, prefix=settings.api_prefix)
+
+
+@app.on_event("startup")
+async def startup_event():
+    tool_reg = get_tool_registry()
+    logger.info("Tool registry ready with %d tools: %s", len(tool_reg.list_tools()), tool_reg.tool_names())
 
 
 @app.get("/")
