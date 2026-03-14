@@ -7,10 +7,6 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
-# We patch heavy dependencies before importing the app so that module-level
-# code in ``backend.main`` (which eagerly creates singletons) does not try to
-# reach a real Ollama instance or ChromaDB directory.
-
 
 def _make_mock_router() -> MagicMock:
     """Build a mock ModelRouter with the methods that endpoints call."""
@@ -54,34 +50,32 @@ def _make_mock_tool_registry() -> MagicMock:
     return reg
 
 
-# Patch the dependency functions that FastAPI's Depends() resolves
 _mock_router = _make_mock_router()
 _mock_vs = _make_mock_vector_store()
 _mock_tool_reg = _make_mock_tool_registry()
 
 
-@pytest.fixture(autouse=True)
-def _patch_deps():
-    """Patch singleton factories so the app never talks to Ollama / ChromaDB."""
+@pytest_asyncio.fixture
+async def client():
+    """Async HTTP client wired to the FastAPI app with dependency overrides."""
+    from backend.deps import get_model_router, get_vector_store, get_tool_registry
+    from backend.main import app
+
+    # Use FastAPI's dependency override mechanism so Depends() resolves correctly
+    app.dependency_overrides[get_model_router] = lambda: _mock_router
+    app.dependency_overrides[get_vector_store] = lambda: _mock_vs
+    app.dependency_overrides[get_tool_registry] = lambda: _mock_tool_reg
+
+    # Also patch the direct calls in main.py (health endpoint calls get_model_router directly)
     with (
-        patch("backend.deps.get_model_router", return_value=_mock_router),
-        patch("backend.deps.get_vector_store", return_value=_mock_vs),
-        patch("backend.deps.get_tool_registry", return_value=_mock_tool_reg),
-        # Also patch the module-level calls in main.py
         patch("backend.main.get_model_router", return_value=_mock_router),
         patch("backend.main.get_tool_registry", return_value=_mock_tool_reg),
     ):
-        yield
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+            yield ac
 
-
-@pytest_asyncio.fixture
-async def client(_patch_deps):
-    """Async HTTP client wired to the FastAPI app."""
-    from backend.main import app
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
-        yield ac
+    app.dependency_overrides.clear()
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────
@@ -120,7 +114,6 @@ async def test_setup_status(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_setup_hardware(client: AsyncClient):
     """GET /api/setup/hardware should return hardware detection info."""
-    # Patch the hardware detector so it doesn't depend on real hardware
     fake_hw = MagicMock()
     fake_hw.cpu_name = "Test CPU"
     fake_hw.cpu_cores = 8
