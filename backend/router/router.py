@@ -11,6 +11,7 @@ import json
 
 from .classifier import QueryClassifier, TaskType
 from .model_profiles import ModelRegistry, ModelProfile, ModelType
+from .embedding_router import EmbeddingRouter
 import ollama
 
 logger = logging.getLogger(__name__)
@@ -37,11 +38,20 @@ class ModelRouter:
         self.registry = ModelRegistry()
         self.use_llm_routing = use_llm_routing
         self.routing_timeout_ms = routing_timeout_ms
-        
+
         self._discover_models()
-        
+
         self._routing_cache: Dict[str, Dict[str, Any]] = {}
         self._cache_max_size = 100
+
+        # Initialize embedding router (fast semantic classification)
+        try:
+            self.embedding_router = EmbeddingRouter(
+                ollama_base_url=ollama_base_url,
+            )
+        except Exception as e:
+            logger.warning(f"Embedding router init failed, using regex fallback: {e}")
+            self.embedding_router = None
 
     def _discover_models(self):
         """Discover available models from Ollama."""
@@ -97,25 +107,46 @@ class ModelRouter:
         if cache_key in self._routing_cache:
             return self._get_cached_response(cache_key, start_time)
 
-        llm_result = None
-        if self.use_llm_routing:
-            llm_result = await self._llm_route(query, conversation_history)
+        # Three-tier routing pipeline: Embedding → LLM → Regex
+        classification = self.fallback_classifier.classify(
+            query, conversation_history=conversation_history, has_images=images is not None
+        )
 
-        if llm_result and llm_result.get("model"):
-            classification = self.fallback_classifier.classify(query, has_images=images is not None)
-            selected_model = llm_result["model"]
-            reasoning = llm_result.get("reasoning", "LLM-based routing")
-            routing_method = "llm"
-            confidence = 0.9
-        else:
-            classification = self.fallback_classifier.classify(query, conversation_history=conversation_history, has_images=images is not None)
+        selected_model = None
+        reasoning = ""
+        routing_method = ""
+        confidence = 0.0
+
+        # Tier 1: Embedding-based semantic routing (fast, ~10ms)
+        if self.embedding_router and self.embedding_router.ready:
+            emb_result = self.embedding_router.classify(query)
+            if emb_result:
+                emb_task_type, emb_confidence = emb_result
+                model_type = TASK_TO_MODEL_TYPE.get(emb_task_type, ModelType.GENERAL)
+                selected_model = self.registry.get_best_model_for_type(model_type)
+                reasoning = f"Semantic embedding match: {emb_task_type.value} (score={emb_confidence:.3f})"
+                routing_method = "embedding"
+                confidence = emb_confidence
+                classification.task_type = emb_task_type
+
+        # Tier 2: LLM-based routing (slower, ~200-500ms, but more accurate for ambiguous queries)
+        if not selected_model and self.use_llm_routing:
+            llm_result = await self._llm_route(query, conversation_history)
+            if llm_result and llm_result.get("model"):
+                selected_model = llm_result["model"]
+                reasoning = llm_result.get("reasoning", "LLM-based routing")
+                routing_method = "llm"
+                confidence = 0.9
+
+        # Tier 3: Regex-based fallback (instant, least accurate)
+        if not selected_model:
             model_type = TASK_TO_MODEL_TYPE.get(classification.task_type, ModelType.GENERAL)
             selected_model = self.registry.get_best_model_for_type(model_type)
-            
+
             if not selected_model:
                 chat_models = self.registry.get_chat_models()
                 selected_model = chat_models[0].name if chat_models else "qwen3:8b"
-            
+
             reasoning = classification.reasoning
             routing_method = "regex_fallback"
             confidence = classification.confidence
@@ -559,13 +590,26 @@ Select the most appropriate model. Respond with ONLY valid JSON:
         }
 
     def _estimate_token_count(self, text: str, context: Optional[str] = None) -> int:
-        """Estimate token count for text."""
-        if not text:
+        """Estimate token count for text using tiktoken when available, else heuristic."""
+        if not text and not context:
             return 0
-        total_chars = len(text)
+        combined = text or ""
         if context:
-            total_chars += len(context)
-        return int(total_chars // 4 * 1.1)
+            combined += context
+
+        # Try tiktoken for accurate counting (cl100k_base covers most modern models)
+        if not hasattr(self, "_tokenizer"):
+            try:
+                import tiktoken
+                self._tokenizer = tiktoken.get_encoding("cl100k_base")
+            except ImportError:
+                self._tokenizer = None
+
+        if self._tokenizer:
+            return len(self._tokenizer.encode(combined))
+
+        # Heuristic fallback: ~3.5 chars per token for English
+        return int(len(combined) / 3.5)
 
     def _pack_messages(self, messages: List[Dict[str, Any]], model: str):
         """Pack messages to fit within model context window."""

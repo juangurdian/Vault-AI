@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
+    use_hybrid: bool = True
+    use_rerank: bool = False
 
 
 class SearchResult(BaseModel):
@@ -189,8 +191,11 @@ async def rag_search(
     body: SearchRequest,
     vector_store: VectorStore = Depends(get_vector_store),
 ):
-    """Search local vector store."""
-    hits = await vector_store.search(body.query, top_k=body.top_k)
+    """Search local vector store with optional hybrid BM25+vector and reranking."""
+    hits = await vector_store.search(
+        body.query, top_k=body.top_k,
+        use_hybrid=body.use_hybrid, use_rerank=body.use_rerank,
+    )
     return SearchResult(
         results=[
             {
@@ -249,14 +254,10 @@ async def delete_document(
 
 @router.get("/stats")
 async def rag_stats(vector_store: VectorStore = Depends(get_vector_store)):
-    """Get vector store statistics."""
+    """Get vector store statistics including BM25 index."""
     try:
-        count = vector_store.get_count()
-        return {
-            "document_count": count,
-            "embedding_model": vector_store.embedding_model,
-            "persist_directory": str(vector_store.persist_directory),
-        }
+        stats = vector_store.get_stats()
+        return stats
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))

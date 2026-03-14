@@ -98,96 +98,208 @@ DEFAULT_SYSTEM_PROMPTS = {
 MODEL_TYPE_PATTERNS = {
     ModelType.CODING: [
         r"coder", r"code", r"codestral", r"starcoder", r"codellama",
-        r"deepseek-coder", r"wizard-coder", r"phind"
+        r"deepseek-coder", r"wizard-coder", r"phind", r"codegeex",
     ],
     ModelType.REASONING: [
         r"deepseek-r1", r"reasoning", r"think", r"math", r"wizard-math",
-        r"orca", r"platypus"
+        r"orca", r"platypus", r"phi-?4", r"phi4",
     ],
     ModelType.VISION: [
         r"llava", r"vision", r"bakllava", r"moondream", r"cogvlm",
-        r"minicpm-v", r"llama.*vision"
+        r"minicpm-v", r"llama.*vision", r"internvl",
     ],
     ModelType.CREATIVE: [
-        r"creative", r"writer", r"story", r"novel"
+        r"creative", r"writer", r"story", r"novel", r"gemma",
     ],
     ModelType.EMBEDDING: [
-        r"embed", r"nomic-embed", r"bge-", r"e5-", r"gte-"
+        r"embed", r"nomic-embed", r"bge-", r"e5-", r"gte-",
+        r"snowflake-arctic-embed", r"mxbai-embed",
     ],
     ModelType.FAST: [
-        r":1b", r":2b", r":3b", r":4b", r"tiny", r"mini", r"small"
+        r":0\.\d+b", r":1b", r":1\.\d+b", r":2b", r":3b", r":4b",
+        r"tiny", r"mini", r"small",
     ],
 }
 
 
 # Known model defaults (for common models)
 KNOWN_MODEL_DEFAULTS: Dict[str, Dict[str, Any]] = {
+    # --- Qwen 3 family ---
+    "qwen3:1.7b": {
+        "model_type": ModelType.FAST, "display_name": "Qwen3 1.7B",
+        "description": "Ultra-fast model for simple queries",
+        "context_window": 32768, "strengths": ["speed", "efficiency"],
+        "weaknesses": ["complex_reasoning"], "estimated_tokens_per_sec": 80,
+        "estimated_vram_gb": 1.5, "priority": 30,
+    },
     "qwen3:4b": {
-        "model_type": ModelType.FAST,
-        "display_name": "Qwen3 4B",
+        "model_type": ModelType.FAST, "display_name": "Qwen3 4B",
         "description": "Fast, efficient model for simple queries",
-        "context_window": 32768,
-        "strengths": ["speed", "efficiency", "simple_queries"],
+        "context_window": 32768, "strengths": ["speed", "efficiency", "simple_queries"],
         "weaknesses": ["complex_reasoning", "long_context"],
-        "estimated_tokens_per_sec": 50,
-        "estimated_vram_gb": 3.5,
-        "priority": 40,
+        "estimated_tokens_per_sec": 50, "estimated_vram_gb": 3.5, "priority": 40,
     },
     "qwen3:8b": {
-        "model_type": ModelType.GENERAL,
-        "display_name": "Qwen3 8B",
+        "model_type": ModelType.GENERAL, "display_name": "Qwen3 8B",
         "description": "Balanced model for general conversation",
-        "context_window": 32768,
-        "strengths": ["balanced", "general_purpose", "coherent"],
+        "context_window": 32768, "strengths": ["balanced", "general_purpose", "coherent"],
         "weaknesses": ["very_complex_tasks"],
-        "estimated_tokens_per_sec": 35,
-        "estimated_vram_gb": 6,
-        "priority": 60,
+        "estimated_tokens_per_sec": 35, "estimated_vram_gb": 6, "priority": 60,
+    },
+    "qwen3:14b": {
+        "model_type": ModelType.GENERAL, "display_name": "Qwen3 14B",
+        "description": "High-quality general model with strong reasoning",
+        "context_window": 32768, "strengths": ["general_purpose", "reasoning", "coherent"],
+        "weaknesses": ["speed"], "estimated_tokens_per_sec": 22,
+        "estimated_vram_gb": 10, "priority": 65,
+    },
+    "qwen3:32b": {
+        "model_type": ModelType.REASONING, "display_name": "Qwen3 32B",
+        "description": "Large model with exceptional general + reasoning ability",
+        "context_window": 32768, "strengths": ["reasoning", "general_purpose", "analysis"],
+        "weaknesses": ["speed", "vram"], "estimated_tokens_per_sec": 12,
+        "estimated_vram_gb": 22, "priority": 75,
+    },
+    # --- DeepSeek R1 family ---
+    "deepseek-r1:1.5b": {
+        "model_type": ModelType.FAST, "display_name": "DeepSeek R1 1.5B",
+        "description": "Lightweight reasoning model",
+        "context_window": 16384, "strengths": ["reasoning", "speed"],
+        "weaknesses": ["complex_tasks"], "estimated_tokens_per_sec": 70,
+        "estimated_vram_gb": 1.5, "priority": 25,
     },
     "deepseek-r1:8b": {
-        "model_type": ModelType.REASONING,
-        "display_name": "DeepSeek R1 8B",
+        "model_type": ModelType.REASONING, "display_name": "DeepSeek R1 8B",
         "description": "Advanced reasoning and analysis model",
-        "context_window": 16384,
-        "strengths": ["reasoning", "analysis", "step_by_step", "complex_tasks"],
-        "weaknesses": ["speed"],
-        "estimated_tokens_per_sec": 25,
-        "estimated_vram_gb": 6,
-        "priority": 70,
+        "context_window": 16384, "strengths": ["reasoning", "analysis", "step_by_step", "complex_tasks"],
+        "weaknesses": ["speed"], "estimated_tokens_per_sec": 25,
+        "estimated_vram_gb": 6, "priority": 70,
+    },
+    "deepseek-r1:14b": {
+        "model_type": ModelType.REASONING, "display_name": "DeepSeek R1 14B",
+        "description": "Strong reasoning model for complex analysis",
+        "context_window": 16384, "strengths": ["reasoning", "analysis", "math", "complex_tasks"],
+        "weaknesses": ["speed"], "estimated_tokens_per_sec": 18,
+        "estimated_vram_gb": 10, "priority": 75,
+    },
+    "deepseek-r1:32b": {
+        "model_type": ModelType.REASONING, "display_name": "DeepSeek R1 32B",
+        "description": "Exceptional reasoning for the hardest problems",
+        "context_window": 16384, "strengths": ["reasoning", "math", "analysis", "complex_tasks"],
+        "weaknesses": ["speed", "vram"], "estimated_tokens_per_sec": 10,
+        "estimated_vram_gb": 22, "priority": 80,
+    },
+    # --- Coding models ---
+    "qwen2.5-coder:3b": {
+        "model_type": ModelType.CODING, "display_name": "Qwen 2.5 Coder 3B",
+        "description": "Lightweight coding model",
+        "context_window": 32768, "strengths": ["coding", "speed"],
+        "weaknesses": ["complex_code"], "estimated_tokens_per_sec": 55,
+        "estimated_vram_gb": 2.5, "priority": 60,
     },
     "qwen2.5-coder:7b": {
-        "model_type": ModelType.CODING,
-        "display_name": "Qwen 2.5 Coder 7B",
+        "model_type": ModelType.CODING, "display_name": "Qwen 2.5 Coder 7B",
         "description": "Specialized coding and programming model",
-        "context_window": 32768,
-        "strengths": ["coding", "debugging", "code_review", "programming"],
-        "weaknesses": ["general_chat"],
-        "estimated_tokens_per_sec": 35,
-        "estimated_vram_gb": 5.5,
-        "priority": 80,
+        "context_window": 32768, "strengths": ["coding", "debugging", "code_review", "programming"],
+        "weaknesses": ["general_chat"], "estimated_tokens_per_sec": 35,
+        "estimated_vram_gb": 5.5, "priority": 80,
     },
+    "qwen2.5-coder:14b": {
+        "model_type": ModelType.CODING, "display_name": "Qwen 2.5 Coder 14B",
+        "description": "Superior code generation and understanding",
+        "context_window": 32768, "strengths": ["coding", "debugging", "architecture", "code_review"],
+        "weaknesses": ["speed"], "estimated_tokens_per_sec": 20,
+        "estimated_vram_gb": 10, "priority": 85,
+    },
+    "qwen2.5-coder:32b": {
+        "model_type": ModelType.CODING, "display_name": "Qwen 2.5 Coder 32B",
+        "description": "Top-tier local coding model",
+        "context_window": 32768, "strengths": ["coding", "architecture", "debugging", "code_review"],
+        "weaknesses": ["speed", "vram"], "estimated_tokens_per_sec": 10,
+        "estimated_vram_gb": 22, "priority": 90,
+    },
+    # --- Vision models ---
     "llava:7b": {
-        "model_type": ModelType.VISION,
-        "display_name": "LLaVA 7B",
+        "model_type": ModelType.VISION, "display_name": "LLaVA 7B",
         "description": "Vision model for image analysis",
-        "context_window": 4096,
-        "strengths": ["vision", "image_analysis", "visual_qa"],
-        "weaknesses": ["text_only_tasks"],
-        "estimated_tokens_per_sec": 25,
-        "estimated_vram_gb": 5.5,
-        "priority": 90,
-        "supports_vision": True,
+        "context_window": 4096, "strengths": ["vision", "image_analysis", "visual_qa"],
+        "weaknesses": ["text_only_tasks"], "estimated_tokens_per_sec": 25,
+        "estimated_vram_gb": 5.5, "priority": 90, "supports_vision": True,
     },
+    "llava:13b": {
+        "model_type": ModelType.VISION, "display_name": "LLaVA 13B",
+        "description": "High-quality vision model",
+        "context_window": 4096, "strengths": ["vision", "image_analysis", "visual_qa"],
+        "weaknesses": ["text_only_tasks", "speed"], "estimated_tokens_per_sec": 18,
+        "estimated_vram_gb": 10, "priority": 92, "supports_vision": True,
+    },
+    "moondream:1.8b": {
+        "model_type": ModelType.VISION, "display_name": "Moondream 1.8B",
+        "description": "Lightweight vision model",
+        "context_window": 2048, "strengths": ["vision", "speed"],
+        "weaknesses": ["detail", "complex_images"], "estimated_tokens_per_sec": 50,
+        "estimated_vram_gb": 1.5, "priority": 70, "supports_vision": True,
+    },
+    # --- Gemma family ---
+    "gemma3:4b": {
+        "model_type": ModelType.GENERAL, "display_name": "Gemma 3 4B",
+        "description": "Google's efficient small model",
+        "context_window": 8192, "strengths": ["efficiency", "general_purpose"],
+        "weaknesses": ["complex_reasoning"], "estimated_tokens_per_sec": 50,
+        "estimated_vram_gb": 3.5, "priority": 35,
+    },
+    "gemma3:12b": {
+        "model_type": ModelType.CREATIVE, "display_name": "Gemma 3 12B",
+        "description": "Strong creative and general model",
+        "context_window": 8192, "strengths": ["creative", "general_purpose", "coherent"],
+        "weaknesses": ["reasoning"], "estimated_tokens_per_sec": 25,
+        "estimated_vram_gb": 9, "priority": 60,
+    },
+    "gemma3:27b": {
+        "model_type": ModelType.CREATIVE, "display_name": "Gemma 3 27B",
+        "description": "Excellent creative writing and general use",
+        "context_window": 8192, "strengths": ["creative", "writing", "coherent"],
+        "weaknesses": ["speed"], "estimated_tokens_per_sec": 14,
+        "estimated_vram_gb": 19, "priority": 70,
+    },
+    # --- Llama 4 family ---
+    "llama4-scout": {
+        "model_type": ModelType.GENERAL, "display_name": "Llama 4 Scout",
+        "description": "Meta's MoE model with massive context window",
+        "context_window": 131072, "strengths": ["general_purpose", "long_context", "multilingual"],
+        "weaknesses": ["vram"], "estimated_tokens_per_sec": 20,
+        "estimated_vram_gb": 14, "priority": 68,
+    },
+    # --- Mistral family ---
+    "mistral:7b": {
+        "model_type": ModelType.GENERAL, "display_name": "Mistral 7B",
+        "description": "Strong general-purpose model",
+        "context_window": 32768, "strengths": ["general_purpose", "balanced"],
+        "weaknesses": ["reasoning"], "estimated_tokens_per_sec": 35,
+        "estimated_vram_gb": 5.5, "priority": 55,
+    },
+    # --- Phi family ---
+    "phi4:14b": {
+        "model_type": ModelType.REASONING, "display_name": "Phi-4 14B",
+        "description": "Microsoft's efficient reasoning model",
+        "context_window": 16384, "strengths": ["reasoning", "math", "efficiency"],
+        "weaknesses": ["creative"], "estimated_tokens_per_sec": 22,
+        "estimated_vram_gb": 10, "priority": 65,
+    },
+    # --- Embedding models ---
     "nomic-embed-text": {
-        "model_type": ModelType.EMBEDDING,
-        "display_name": "Nomic Embed Text",
+        "model_type": ModelType.EMBEDDING, "display_name": "Nomic Embed Text",
         "description": "Text embedding model for RAG",
-        "context_window": 8192,
-        "strengths": ["embeddings", "semantic_search"],
-        "weaknesses": ["not_for_chat"],
-        "estimated_tokens_per_sec": 100,
-        "estimated_vram_gb": 0.5,
-        "priority": 0,
+        "context_window": 8192, "strengths": ["embeddings", "semantic_search"],
+        "weaknesses": ["not_for_chat"], "estimated_tokens_per_sec": 100,
+        "estimated_vram_gb": 0.5, "priority": 0,
+    },
+    "bge-m3": {
+        "model_type": ModelType.EMBEDDING, "display_name": "BGE-M3",
+        "description": "Multilingual embedding model with dense+sparse support",
+        "context_window": 8192, "strengths": ["embeddings", "multilingual", "hybrid_search"],
+        "weaknesses": ["not_for_chat"], "estimated_tokens_per_sec": 80,
+        "estimated_vram_gb": 0.6, "priority": 0,
     },
 }
 
@@ -226,16 +338,24 @@ def estimate_context_window(model_name: str, model_details: Optional[Dict] = Non
     
     # Heuristics based on model family
     name_lower = model_name.lower()
-    
+
     if "qwen" in name_lower:
         return 32768
-    elif "llama" in name_lower or "mistral" in name_lower:
+    elif "llama4" in name_lower or "llama-4" in name_lower:
+        return 131072  # Llama 4 Scout: 10M token window, Maverick: 1M — cap at 128K
+    elif "llama" in name_lower:
         return 8192
+    elif "mistral" in name_lower:
+        return 32768
     elif "deepseek" in name_lower:
         return 16384
+    elif "gemma" in name_lower:
+        return 8192
     elif "phi" in name_lower:
-        return 4096
-    
+        return 16384
+    elif "command-r" in name_lower:
+        return 131072
+
     return 4096  # Safe default
 
 

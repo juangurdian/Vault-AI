@@ -30,6 +30,12 @@ class Settings(BaseSettings):
         default_factory=lambda: ["brave", "perplexity", "duckduckgo", "searxng"],
         description="Preferred search provider order",
     )
+    # Hardware settings
+    hardware_tier: str = Field("auto", description="Hardware tier (auto, minimal, standard, performance, ultra)")
+    auto_detect_hardware: bool = Field(True, description="Auto-detect hardware capabilities on startup")
+    max_vram_usage_percent: int = Field(85, description="Maximum VRAM usage percentage")
+    # Setup
+    setup_completed: bool = Field(False, description="Whether first-run setup has been completed")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -67,7 +73,8 @@ def save_settings(updates: dict) -> Settings:
     MUTABLE_KEYS = {
         "brave_api_key", "perplexity_api_key", "searxng_base_url",
         "ollama_base_url", "comfyui_base_url", "default_model",
-        "search_provider_order",
+        "search_provider_order", "hardware_tier", "auto_detect_hardware",
+        "max_vram_usage_percent", "setup_completed",
     }
     for key, value in updates.items():
         if key in MUTABLE_KEYS:

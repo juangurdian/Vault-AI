@@ -23,3 +23,15 @@ trafilatura
 duckduckgo-search>=6.0.0
 psutil>=5.9.0
 
+# Phase 1: Hardware detection
+pynvml>=12.0.0
+
+# Phase 1: Accurate token counting
+tiktoken>=0.8.0
+
+# Phase 3: PDF parsing for RAG ingestion
+pymupdf>=1.24.0
+
+# Phase 3: DOCX parsing for RAG ingestion
+python-docx>=1.1.0
+
