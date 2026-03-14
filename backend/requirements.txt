@@ -35,3 +35,7 @@ pymupdf>=1.24.0
 # Phase 3: DOCX parsing for RAG ingestion
 python-docx>=1.1.0
 
+# Phase 6: Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+

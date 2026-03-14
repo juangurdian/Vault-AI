@@ -146,3 +146,28 @@ async def coding_agent(
         routing_info=result.routing_info,
     )
 
+
+class ExecuteCodeRequest(BaseModel):
+    code: str
+    language: str = "python"
+    timeout: int = 30
+
+
+@router.post("/execute-code")
+async def execute_code(body: ExecuteCodeRequest):
+    """Execute code in a sandboxed environment."""
+    from ..agents.tools.code_executor import execute_code as run_code
+
+    try:
+        result = await run_code(body.code, body.language, timeout=body.timeout)
+        return result
+    except Exception as e:
+        logger.error(f"Code execution error: {e}")
+        return {"stdout": "", "stderr": str(e), "success": False}
+
+
+@router.get("/list")
+async def list_agents(manager: AgentManager = Depends(get_agent_manager)):
+    """List all available agents."""
+    return {"agents": manager.list_agents()}
+

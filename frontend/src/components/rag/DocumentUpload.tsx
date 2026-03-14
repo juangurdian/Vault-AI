@@ -68,8 +68,8 @@ export default function DocumentUpload({ open, onClose }: DocumentUploadProps) {
     let uploadedCount = 0;
     for (const file of Array.from(files)) {
       const ext = file.name.split(".").pop()?.toLowerCase();
-      if (!["pdf", "txt", "md"].includes(ext || "")) {
-        setError(`Unsupported file type: ${file.name} (use PDF, TXT, or MD)`);
+      if (!["pdf", "docx", "txt", "md", "html", "htm", "csv"].includes(ext || "")) {
+        setError(`Unsupported file type: ${file.name} (use PDF, DOCX, TXT, MD, HTML, or CSV)`);
         continue;
       }
 
@@ -196,12 +196,12 @@ export default function DocumentUpload({ open, onClose }: DocumentUploadProps) {
             <p className="text-sm font-medium text-slate-200">
               {uploading ? "Uploading..." : "Drop files here or click to upload"}
             </p>
-            <p className="mt-2 text-xs text-slate-500">Supports PDF, TXT, MD files</p>
+            <p className="mt-2 text-xs text-slate-500">Supports PDF, DOCX, TXT, MD, HTML, CSV files</p>
 
             <input
               type="file"
               multiple
-              accept=".pdf,.txt,.md"
+              accept=".pdf,.docx,.txt,.md,.html,.htm,.csv"
               onChange={(e) => handleUpload(e.target.files)}
               className="absolute inset-0 cursor-pointer opacity-0"
               disabled={uploading}

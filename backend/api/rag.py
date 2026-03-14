@@ -70,10 +70,10 @@ async def ingest_document(
     collection: str = Form("knowledge_base"),
     vector_store: VectorStore = Depends(get_vector_store),
 ):
-    """Ingest a document (PDF, TXT, MD) or raw text into the RAG vector store.
+    """Ingest a document into the RAG vector store.
 
     Accepts either:
-    - A multipart file upload (PDF, TXT, MD)
+    - A multipart file upload (PDF, DOCX, TXT, MD, HTML, CSV)
     - A `text` form field with raw text content
     """
     raw_text = ""
@@ -105,6 +105,32 @@ async def ingest_document(
                         status_code=422,
                         detail="PDF parsing requires 'pypdf' or 'PyPDF2'. Install with: pip install pypdf",
                     )
+        elif filename.lower().endswith(".docx") or content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            try:
+                import docx
+                doc = docx.Document(io.BytesIO(raw_bytes))
+                raw_text = "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            except ImportError:
+                raise HTTPException(
+                    status_code=422,
+                    detail="DOCX parsing requires 'python-docx'. Install with: pip install python-docx",
+                )
+        elif filename.lower().endswith(".csv") or content_type == "text/csv":
+            import csv
+            text_content = raw_bytes.decode("utf-8", errors="replace")
+            reader = csv.reader(io.StringIO(text_content))
+            rows = list(reader)
+            if rows:
+                header = rows[0]
+                raw_text = "\n".join(
+                    ", ".join(f"{header[i] if i < len(header) else f'col{i}'}: {cell}" for i, cell in enumerate(row))
+                    for row in rows[1:]
+                )
+        elif filename.lower().endswith((".html", ".htm")):
+            import re
+            text_content = raw_bytes.decode("utf-8", errors="replace")
+            raw_text = re.sub(r"<[^>]+>", " ", text_content)
+            raw_text = re.sub(r"\s+", " ", raw_text).strip()
         elif filename.lower().endswith((".txt", ".md")) or content_type.startswith("text/"):
             raw_text = raw_bytes.decode("utf-8", errors="replace")
         else:

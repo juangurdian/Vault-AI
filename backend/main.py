@@ -6,7 +6,7 @@ from datetime import datetime
 
 from .config import get_settings
 from .deps import get_model_router, get_tool_registry
-from .api import chat, agents, rag, models, feedback, image, conversations, system, preferences, setup
+from .api import chat, agents, rag, models, feedback, image, conversations, system, preferences, setup, monitoring
 from .api import settings as settings_api
 
 logging.basicConfig(level=logging.INFO)
@@ -41,6 +41,7 @@ app.include_router(conversations.router, prefix=settings.api_prefix)
 app.include_router(system.router, prefix=settings.api_prefix)
 app.include_router(preferences.router, prefix=settings.api_prefix)
 app.include_router(setup.router, prefix=settings.api_prefix)
+app.include_router(monitoring.router, prefix=settings.api_prefix)
 
 
 @app.on_event("startup")

@@ -6,7 +6,7 @@ import MarkdownRenderer from "./MarkdownRenderer";
 import type { Message, ToolUsage } from "./types";
 import Feedback from "./Feedback";
 import { useChatStore } from "@/lib/stores/chat";
-import { User, Bot, Sparkles, Brain, Image as ImageIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Wrench, Search, Globe, BookOpen, FileSearch, Loader2, CheckCircle2, XCircle, ChevronRight } from "lucide-react";
+import { User, Bot, Sparkles, Brain, Image as ImageIcon, FileText, AlertCircle, ThumbsUp, ThumbsDown, Wrench, Search, Globe, BookOpen, FileSearch, Loader2, CheckCircle2, XCircle, ChevronRight, Copy, Check } from "lucide-react";
 
 type MessageBubbleProps = {
   message: Message;
@@ -83,6 +83,13 @@ export default function MessageBubble({
   const isUser = message.role === "user";
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyMessage = async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (isStreaming && message.thinking && message.thinking.length > 0) {
@@ -294,6 +301,19 @@ export default function MessageBubble({
               </>
             )}
           </div>
+
+          {/* Message actions: Copy */}
+          {!isUser && !isStreaming && message.content.length > 0 && (
+            <div className="mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={handleCopyMessage}
+                className="rounded-md p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-colors"
+                title="Copy message"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          )}
 
           {/* Feedback section */}
           <AnimatePresence>
